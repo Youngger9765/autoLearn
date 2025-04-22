@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-async function fetchWithRetry(api: string, body: any, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
+async function fetchWithRetry(api: string, body: Record<string, unknown>, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
   let lastErr;
   for (const model of models) {
     try {
