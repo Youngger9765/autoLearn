@@ -68,56 +68,99 @@ function ChatAssistant({ allContent }: { allContent: string }) {
   );
 }
 
+interface Section {
+  title: string;
+  content: string;
+  questions: {
+    question_text: string;
+    options: string[];
+  }[];
+}
+
 export default function GenerateCourse() {
   const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [course, setCourse] = useState<Course | null>(null);
+  const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "questions" | null>(null);
+  const [outline, setOutline] = useState<string[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState(0);
 
+  // 分步產生主流程
   const handleGenerate = async () => {
-    setLoading(true);
     setError("");
-    setCourse(null);
+    setOutline([]);
+    setSections([]);
+    setProgress(0);
+
+    // 1. 產生大綱
+    setLoadingStep("outline");
+    let outlineArr: string[] = [];
     try {
-      const res = await fetch("/api/generate-course", {
+      const res = await fetch("/api/generate-outline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "產生大綱失敗");
+      outlineArr = data.outline;
+      setOutline(outlineArr);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "產生大綱失敗");
+      setLoadingStep(null);
+      return;
+    }
 
-      // 先判斷 content-type
-      const contentType = res.headers.get("content-type");
-      let data: unknown = null;
-      if (contentType && contentType.includes("application/json")) {
-        data = await res.json();
-        if (!res.ok) {
-          setError(
-            typeof data === "object" && data && "error" in data
-              ? (data as { error: string }).error
-              : "API 請求失敗"
-          );
-          console.error("API error detail:", data);
-          return;
-        }
-        setCourse(data as Course);
-      } else {
-        // 非 JSON，直接讀取文字內容
-        const text = await res.text();
-        setError(`API 回傳非 JSON 格式：${text}`);
-        console.error("API 非 JSON 回應：", text);
+    // 2. 產生每章內容
+    setLoadingStep("sections");
+    const sectionArr: Section[] = [];
+    for (let i = 0; i < outlineArr.length; i++) {
+      setProgress(i / outlineArr.length);
+      try {
+        const res = await fetch("/api/generate-section", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sectionTitle: outlineArr[i], courseTitle: prompt }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "產生章節內容失敗");
+        sectionArr.push({ title: outlineArr[i], content: data.content, questions: [] });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : `產生章節「${outlineArr[i]}」內容失敗`);
+        setLoadingStep(null);
         return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "發生錯誤");
-      console.error("前端錯誤：", err);
-    } finally {
-      setLoading(false);
+      setProgress((i + 1) / outlineArr.length);
     }
+    setSections(sectionArr);
+
+    // 3. 產生每章題目
+    setLoadingStep("questions");
+    for (let i = 0; i < sectionArr.length; i++) {
+      setProgress(i / sectionArr.length);
+      try {
+        const res = await fetch("/api/generate-questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "產生題目失敗");
+        sectionArr[i].questions = data.questions;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : `產生章節「${sectionArr[i].title}」題目失敗`);
+        setLoadingStep(null);
+        return;
+      }
+      setProgress((i + 1) / sectionArr.length);
+    }
+    setSections([...sectionArr]);
+    setLoadingStep(null);
+    setProgress(1);
   };
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: 24, background: "#f5f7fa", minHeight: "100vh" }}>
-      {/* 標題區塊 */}
       <h1 style={{
         fontSize: 32,
         fontWeight: 700,
@@ -158,7 +201,7 @@ export default function GenerateCourse() {
         />
         <button
           onClick={handleGenerate}
-          disabled={loading || !prompt}
+          disabled={loadingStep !== null || !prompt}
           style={{
             padding: "10px 24px",
             fontSize: 18,
@@ -166,13 +209,38 @@ export default function GenerateCourse() {
             color: "#fff",
             border: "none",
             borderRadius: 6,
-            cursor: loading || !prompt ? "not-allowed" : "pointer",
-            opacity: loading || !prompt ? 0.6 : 1
+            cursor: loadingStep !== null || !prompt ? "not-allowed" : "pointer",
+            opacity: loadingStep !== null || !prompt ? 0.6 : 1
           }}
         >
-          {loading ? "產生中..." : "產生課程"}
+          {loadingStep ? "產生中..." : "產生課程"}
         </button>
       </div>
+
+      {/* 進度條與 loading 狀態 */}
+      {loadingStep && (
+        <div style={{ margin: "24px 0" }}>
+          <div style={{ marginBottom: 8, color: "#1976d2", fontWeight: 500 }}>
+            {loadingStep === "outline" && "正在產生課程大綱..."}
+            {loadingStep === "sections" && "正在產生章節內容..."}
+            {loadingStep === "questions" && "正在產生章節題目..."}
+          </div>
+          <div style={{
+            width: "100%",
+            height: 10,
+            background: "#e3e3e3",
+            borderRadius: 6,
+            overflow: "hidden"
+          }}>
+            <div style={{
+              width: `${Math.round(progress * 100)}%`,
+              height: "100%",
+              background: "#1976d2",
+              transition: "width 0.3s"
+            }} />
+          </div>
+        </div>
+      )}
 
       {/* 錯誤訊息 */}
       {error && <div style={{
@@ -182,14 +250,28 @@ export default function GenerateCourse() {
         borderRadius: 8,
         marginTop: 16,
         fontWeight: 500
-      }}>{error}</div>}
+      }}>
+        {error}
+        <button
+          onClick={handleGenerate}
+          style={{
+            marginLeft: 16,
+            background: "#fff",
+            color: "#d32f2f",
+            border: "1px solid #d32f2f",
+            borderRadius: 6,
+            padding: "4px 12px",
+            cursor: "pointer"
+          }}
+        >重試</button>
+      </div>}
 
       {/* 課程內容 */}
-      {course && (
+      {sections.length > 0 && (
         <div style={{ marginTop: 32 }}>
-          <h2 style={{ color: "#1976d2", borderBottom: "2px solid #1976d2", paddingBottom: 4 }}>{course.title}</h2>
-          {course.sections?.map((sec, idx) => (
-            <div key={sec.id || idx} style={{
+          <h2 style={{ color: "#1976d2", borderBottom: "2px solid #1976d2", paddingBottom: 4 }}>{prompt}</h2>
+          {sections.map((sec, idx) => (
+            <div key={sec.title} style={{
               border: "1px solid #e3e3e3",
               borderRadius: 10,
               margin: "20px 0",
@@ -199,18 +281,6 @@ export default function GenerateCourse() {
             }}>
               <h3 style={{ color: "#333", marginBottom: 8 }}>{sec.title}</h3>
               <p style={{ color: "#444", marginBottom: 12 }}>{sec.content}</p>
-              {sec.youtube_url && (
-                <iframe
-                  width="400"
-                  height="225"
-                  src={`https://www.youtube.com/embed/${extractID(sec.youtube_url)}`}
-                  title={sec.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  style={{ margin: "16px 0", borderRadius: 8, border: "1px solid #ccc" }}
-                />
-              )}
               {sec.questions?.map((q, qidx) => (
                 <div key={qidx} style={{ marginTop: 12 }}>
                   <p style={{ fontWeight: 500 }}>{q.question_text}</p>
@@ -226,8 +296,8 @@ export default function GenerateCourse() {
         </div>
       )}
       {/* AI 助教 */}
-      {course && course.sections && (
-        <ChatAssistant allContent={course.sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')} />
+      {sections.length > 0 && (
+        <ChatAssistant allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')} />
       )}
     </div>
   );
