@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Course, Section, Question } from "../types"; // 路徑依你的專案結構調整
 
 function extractID(url: string) {
   // 支援多種 YouTube 連結格式
@@ -70,7 +71,7 @@ function ChatAssistant({ allContent }: { allContent: string }) {
 export default function GenerateCourse() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [course, setCourse] = useState<any>(null);
+  const [course, setCourse] = useState<Course | null>(null);
   const [error, setError] = useState("");
 
   const handleGenerate = async () => {
@@ -111,7 +112,7 @@ export default function GenerateCourse() {
       {course && (
         <div style={{ marginTop: 32 }}>
           <h2>{course.title}</h2>
-          {course.sections?.map((sec: any, idx: number) => (
+          {course.sections?.map((sec, idx) => (
             <div key={sec.id || idx} style={{ border: "1px solid #ccc", margin: "16px 0", padding: 16 }}>
               <h3>{sec.title}</h3>
               <p>{sec.content}</p>
@@ -127,10 +128,10 @@ export default function GenerateCourse() {
                   style={{ margin: "16px 0" }}
                 />
               )}
-              {sec.questions?.map((q: any, qidx: number) => (
+              {sec.questions?.map((q, qidx) => (
                 <div key={qidx} style={{ marginTop: 12 }}>
                   <p>{q.question_text}</p>
-                  {q.options?.map((opt: string, i: number) => (
+                  {q.options?.map((opt, i) => (
                     <label key={i} style={{ marginRight: 12 }}>
                       <input type="radio" name={`q${idx}_${qidx}`} /> {opt}
                     </label>
