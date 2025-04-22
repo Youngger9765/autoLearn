@@ -85,22 +85,28 @@ export default function GenerateCourse() {
         body: JSON.stringify({ prompt }),
       });
 
+      // 先判斷 content-type
+      const contentType = res.headers.get("content-type");
       let data: unknown = null;
-      try {
+      if (contentType && contentType.includes("application/json")) {
         data = await res.json();
-      } catch {
-        // 不是 JSON，直接讀取文字內容
+        if (!res.ok) {
+          setError(
+            typeof data === "object" && data && "error" in data
+              ? (data as { error: string }).error
+              : "API 請求失敗"
+          );
+          console.error("API error detail:", data);
+          return;
+        }
+        setCourse(data as Course);
+      } else {
+        // 非 JSON，直接讀取文字內容
         const text = await res.text();
         setError(`API 回傳非 JSON 格式：${text}`);
         console.error("API 非 JSON 回應：", text);
         return;
       }
-      if (!res.ok) {
-        setError(data instanceof Error ? data.message : "API 請求失敗");
-        console.error("API error detail:", data);
-        return;
-      }
-      setCourse(data as Course);
     } catch (err) {
       setError(err instanceof Error ? err.message : "發生錯誤");
       console.error("前端錯誤：", err);
