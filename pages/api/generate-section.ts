@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { sectionTitle, courseTitle } = req.body;
   if (!sectionTitle || !courseTitle) return res.status(400).json({ error: "缺少參數" });
 
-  const sys_prompt = `你是一位課程設計師，請針對課程「${courseTitle}」的章節「${sectionTitle}」產生 300 字以內的講義內容，只回傳純文字，不要多餘說明。`;
+  const sys_prompt = `你是一位課程設計師，請針對課程「${courseTitle}」的章節「${sectionTitle}」產生 300 字以內的講義內容，內容請盡量使用 markdown 語法（如標題、粗體、列點、程式區塊等），只回傳純 markdown，不要多餘說明。`;
 
   try {
     const completion = await openai.chat.completions.create({

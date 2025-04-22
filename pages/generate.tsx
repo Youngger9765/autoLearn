@@ -1,4 +1,7 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 async function fetchWithRetry(api: string, body: Record<string, unknown>, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
   let lastErr;
@@ -335,7 +338,39 @@ export default function GenerateCourse() {
               </h3>
               {/* 內容 */}
               {sec.content
-                ? <p style={{ color: "#444", marginBottom: 12 }}>{sec.content}</p>
+                ? <div style={{ color: "#444", marginBottom: 12 }}>
+                    <ReactMarkdown
+                      components={{
+                        code({ node, inline, className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || "");
+                          return !inline ? (
+                            <SyntaxHighlighter
+                              style={vscDarkPlus}
+                              language={match?.[1] || "javascript"}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, "")}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code
+                              style={{
+                                background: "#eee",
+                                borderRadius: 4,
+                                padding: "2px 4px",
+                                fontSize: 14,
+                              }}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                      }}
+                    >
+                      {sec.content}
+                    </ReactMarkdown>
+                  </div>
                 : loadingStep === "sections" && <SkeletonBlock width="90%" height={20} />
               }
               {/* 章節內容失敗重試 */}
@@ -442,8 +477,11 @@ export default function GenerateCourse() {
                   <div key={qidx} style={{ marginTop: 12 }}>
                     <p style={{ fontWeight: 500 }}>{q.question_text}</p>
                     {q.options?.map((opt, i) => (
-                      <label key={i} style={{ marginRight: 12 }}>
-                        <input type="radio" name={`q${idx}_${qidx}`} /> {opt}
+                      <label key={i} style={{ marginRight: 12, display: "block" }}>
+                        <input type="radio" name={`q${idx}_${qidx}`} style={{ marginRight: 4 }} />
+                        <span style={{ display: "inline-block" }}>
+                          <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
+                        </span>
                       </label>
                     ))}
                   </div>
