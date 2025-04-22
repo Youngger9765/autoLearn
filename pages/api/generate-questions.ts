@@ -7,11 +7,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { sectionTitle, sectionContent } = req.body;
   if (!sectionTitle || !sectionContent) return res.status(400).json({ error: "缺少參數" });
 
-  const sys_prompt = `請根據章節「${sectionTitle}」內容，產生 1~2 題選擇題，回傳 JSON 格式：
+  const sys_prompt = `你是一位課程設計師，請針對章節「${sectionTitle}」內容，產生 2 題選擇題，回傳 JSON 格式：
 [
   {
     "question_text": "題目",
-    "options": ["選項1", "選項2", ...]
+    "options": ["選項1", "選項2", ...],
+    "answer": "正確答案的選項內容",
+    "hint": "簡短提示"
   }
 ]
 只回傳 JSON，不要多餘說明。`;
