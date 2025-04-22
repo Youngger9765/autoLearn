@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const content = completion.choices[0].message.content;
     const outline = JSON.parse(content!);
     res.status(200).json({ outline });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "產生大綱失敗" });
   }
 } 

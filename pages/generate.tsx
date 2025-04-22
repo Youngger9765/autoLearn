@@ -1,12 +1,4 @@
 import { useState } from "react";
-import type { Course } from "../types"; // 路徑依你的專案結構調整
-
-function extractID(url: string) {
-  // 支援多種 YouTube 連結格式
-  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-  const match = url.match(regExp);
-  return match ? match[1] : "";
-}
 
 function ChatAssistant({ allContent }: { allContent: string }) {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
@@ -80,7 +72,6 @@ interface Section {
 export default function GenerateCourse() {
   const [prompt, setPrompt] = useState("");
   const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "questions" | null>(null);
-  const [outline, setOutline] = useState<string[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
@@ -88,7 +79,6 @@ export default function GenerateCourse() {
   // 分步產生主流程
   const handleGenerate = async () => {
     setError("");
-    setOutline([]);
     setSections([]);
     setProgress(0);
 
@@ -104,7 +94,6 @@ export default function GenerateCourse() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "產生大綱失敗");
       outlineArr = data.outline;
-      setOutline(outlineArr);
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
       setLoadingStep(null);
