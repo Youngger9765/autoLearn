@@ -348,9 +348,15 @@ export default function GenerateCourse() {
                 ? <div style={{ color: "#444", marginBottom: 12 }}>
                     <ReactMarkdown
                       components={{
-                        code(props) {
-                          const { className, children, ...rest } = props;
-                          const isInline = (props as any).inline;
+                        code(
+                          props: {
+                            inline?: boolean;
+                            className?: string;
+                            children?: React.ReactNode;
+                          } & React.HTMLAttributes<HTMLElement>
+                        ) {
+                          const { className, children, inline, ...rest } = props;
+                          const isInline = inline;
                           const match = /language-(\w+)/.exec(className || "");
                           return !isInline ? (
                             <SyntaxHighlighter
