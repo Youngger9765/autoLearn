@@ -41,6 +41,22 @@ function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: n
   );
 }
 
+function BlinkingBlank({ height = 24, width = "100%", style = {} }: { height?: number, width?: string | number, style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        animation: "blinking-blank 1s infinite alternate",
+        borderRadius: 6,
+        height,
+        width,
+        margin: "8px 0",
+        ...style,
+      }}
+    />
+  );
+}
+
 function ChatAssistant({ allContent }: { allContent: string }) {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [input, setInput] = useState("");
@@ -129,6 +145,7 @@ export default function GenerateCourse() {
   const [submitted, setSubmitted] = useState<{ [sectionIdx: string]: boolean }>({});
   const [showHint, setShowHint] = useState<{ [sectionIdx: string]: boolean }>({});
   const [hint, setHint] = useState<{ [sectionIdx: string]: string | null }>({});
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
 
   // 分步產生主流程（含影片）
   const handleGenerate = async () => {
@@ -339,295 +356,327 @@ export default function GenerateCourse() {
               background: "#fff",
               boxShadow: "0 1px 4px #0001"
             }}>
-              {/* 標題 */}
-              <h3 style={{ color: "#333", marginBottom: 8 }}>
-                {sec.title || <SkeletonBlock width="40%" height={28} />}
-              </h3>
-              {/* 內容 */}
-              {sec.content
-                ? <div style={{ color: "#444", marginBottom: 12 }}>
-                    <ReactMarkdown
-                      components={{
-                        code(
-                          props: {
-                            inline?: boolean;
-                            className?: string;
-                            children?: React.ReactNode;
-                          } & React.HTMLAttributes<HTMLElement>
-                        ) {
-                          const { className, children, inline, ...rest } = props;
-                          const isInline = inline;
-                          const match = /language-(\w+)/.exec(className || "");
-                          return !isInline ? (
-                            <SyntaxHighlighter
-                              style={atomDark}
-                              language={match?.[1] || "javascript"}
-                              PreTag="div"
-                              {...rest}
-                            >
-                              {String(children).replace(/\n$/, "")}
-                            </SyntaxHighlighter>
-                          ) : (
-                            <code
-                              style={{
-                                background: "#eee",
-                                borderRadius: 4,
-                                padding: "2px 4px",
-                                fontSize: 14,
-                              }}
-                              {...rest}
-                            >
-                              {children}
-                            </code>
-                          );
-                        }
-                      }}
-                    >
-                      {sec.content}
-                    </ReactMarkdown>
-                  </div>
-                : loadingStep === "sections" && <SkeletonBlock width="90%" height={20} />
-              }
-              {/* 章節內容失敗重試 */}
-              {sec.error && sec.error.type === "section" && (
-                <div style={{ color: "#d32f2f", margin: "12px 0" }}>
-                  章節內容產生失敗：{sec.error.message}
-                  <button
-                    style={{
-                      marginLeft: 12,
-                      background: "#fff",
-                      color: "#d32f2f",
-                      border: "1px solid #d32f2f",
-                      borderRadius: 6,
-                      padding: "4px 12px",
-                      cursor: "pointer"
-                    }}
-                    onClick={async () => {
-                      const newSections = [...sections];
-                      newSections[idx].error = {
-                        type: "section",
-                        message: sec.error?.message || "產生章節內容失敗",
-                        retrying: true
-                      };
-                      setSections(newSections);
-                      try {
-                        const data = await fetchWithRetry("/api/generate-section", { sectionTitle: sec.title, courseTitle: prompt });
-                        newSections[idx].content = data.content;
-                        newSections[idx].error = undefined;
-                        setSections([...newSections]);
-                      } catch (err) {
-                        newSections[idx].error = {
-                          type: "section",
-                          message: err instanceof Error ? err.message : "產生章節內容失敗",
-                          retrying: true
-                        };
-                        setSections([...newSections]);
-                      }
-                    }}
-                    disabled={sec.error.retrying}
-                  >重試</button>
-                  {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
-                </div>
-              )}
-              {/* 影片 */}
-              {sec.videoUrl
-                ? (
-                  <iframe
-                    width="400"
-                    height="225"
-                    src={sec.videoUrl.replace("watch?v=", "embed/")}
-                    title={sec.title}
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ margin: "16px 0", borderRadius: 8, border: "1px solid #ccc" }}
-                  />
-                )
-                : loadingStep === "videos" && <SkeletonBlock height={225} width={400} style={{ margin: "16px 0" }} />
-              }
-              {/* 影片失敗重試 */}
-              {sec.error && sec.error.type === "video" && (
-                <div style={{ color: "#d32f2f", margin: "12px 0" }}>
-                  影片產生失敗：{sec.error.message}
-                  <button
-                    style={{
-                      marginLeft: 12,
-                      background: "#fff",
-                      color: "#d32f2f",
-                      border: "1px solid #d32f2f",
-                      borderRadius: 6,
-                      padding: "4px 12px",
-                      cursor: "pointer"
-                    }}
-                    onClick={async () => {
-                      const newSections = [...sections];
-                      newSections[idx].error = {
-                        type: "video",
-                        message: sec.error?.message || "產生影片失敗",
-                        retrying: true
-                      };
-                      setSections(newSections);
-                      try {
-                        const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sec.title, sectionContent: sec.content });
-                        newSections[idx].videoUrl = data.videoUrl;
-                        newSections[idx].error = undefined;
-                        setSections([...newSections]);
-                      } catch (err) {
-                        newSections[idx].error = {
-                          type: "video",
-                          message: err instanceof Error ? err.message : "產生影片失敗",
-                          retrying: true
-                        };
-                        setSections([...newSections]);
-                      }
-                    }}
-                    disabled={sec.error.retrying}
-                  >重試</button>
-                  {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
-                </div>
-              )}
-              {/* 題目 */}
-              {sec.questions && sec.questions.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  {(() => {
-                    const qidx = currentQuestionIdx[String(idx)] ?? 0;
-                    const q = sec.questions[qidx];
-                    if (!q) return null;
-                    return (
-                      <div>
-                        <p style={{ fontWeight: 500 }}>{q.question_text}</p>
-                        {q.options?.map((opt, i) => {
-                          // 判斷是否為錯誤選項
-                          const isSelected = selectedOption[String(idx)] === opt;
-                          const isSubmitted = submitted[String(idx)];
-                          const isCorrect = opt === q.answer;
-                          const showError = isSubmitted && isSelected && !isCorrect;
-                          const showSuccess = isSubmitted && isSelected && isCorrect;
-                          return (
-                            <label
-                              key={i}
-                              style={{
-                                marginRight: 12,
-                                display: "block",
-                                background: showError ? "#ffeaea" : showSuccess ? "#eaffea" : undefined,
-                                borderRadius: 6,
-                                padding: "4px 8px",
-                                fontWeight: showSuccess ? 700 : undefined,
-                                color: showError ? "#d32f2f" : showSuccess ? "#388e3c" : undefined,
-                                border: showError ? "1px solid #d32f2f" : showSuccess ? "1px solid #388e3c" : "1px solid #eee"
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name={`q${idx}_${qidx}`}
-                                value={opt}
-                                checked={selectedOption[String(idx)] === opt}
-                                onChange={() => setSelectedOption(s => ({ ...s, [String(idx)]: opt }))}
-                                disabled={isSubmitted && isCorrect}
-                                style={{ marginRight: 4 }}
-                              />
-                              <span style={{ display: "inline-block" }}>
-                                <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
-                              </span>
-                              {showError && <span style={{ marginLeft: 8 }}>❌</span>}
-                              {showSuccess && <span style={{ marginLeft: 8 }}>✅</span>}
-                            </label>
-                          );
-                        })}
-                        <button
-                          onClick={() => {
-                            if (selectedOption[String(idx)] === q.answer) {
-                              setSubmitted(s => ({ ...s, [String(idx)]: true }));
-                            } else {
-                              // 標記這個選項已經嘗試過，並清空選擇，讓使用者必須重新選
-                              setSubmitted(s => ({ ...s, [String(idx) + "_" + selectedOption[String(idx)]!]: true }));
-                              setSelectedOption(s => ({ ...s, [String(idx)]: null }));
+              {/* 標題列，點擊可展開/收合 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  userSelect: "none",
+                  marginBottom: 8
+                }}
+                onClick={() =>
+                  setExpandedSections(s => ({
+                    ...s,
+                    [String(idx)]: !s[String(idx)]
+                  }))
+                }
+              >
+                <h3 style={{ color: "#333", margin: 0, flex: 1 }}>
+                  {sec.title || <SkeletonBlock width="40%" height={28} />}
+                </h3>
+                <span style={{
+                  fontSize: 20,
+                  marginLeft: 8,
+                  color: "#1976d2",
+                  transition: "transform 0.2s",
+                  transform: expandedSections[String(idx)] ? "rotate(90deg)" : "rotate(0deg)"
+                }}>
+                  ▶
+                </span>
+              </div>
+              {/* 內容區塊，根據 expandedSections 決定是否顯示 */}
+              {expandedSections[String(idx)] && (
+                <>
+                  {/* 內容 */}
+                  {sec.content
+                    ? <div style={{ color: "#444", marginBottom: 12 }}>
+                        <ReactMarkdown
+                          components={{
+                            code(
+                              props: {
+                                inline?: boolean;
+                                className?: string;
+                                children?: React.ReactNode;
+                              } & React.HTMLAttributes<HTMLElement>
+                            ) {
+                              const { className, children, inline, ...rest } = props;
+                              const isInline = inline;
+                              const match = /language-(\w+)/.exec(className || "");
+                              return !isInline ? (
+                                <SyntaxHighlighter
+                                  style={atomDark}
+                                  language={match?.[1] || "javascript"}
+                                  PreTag="div"
+                                  {...rest}
+                                >
+                                  {String(children).replace(/\n$/, "")}
+                                </SyntaxHighlighter>
+                              ) : (
+                                <code
+                                  style={{
+                                    background: "#eee",
+                                    borderRadius: 4,
+                                    padding: "2px 4px",
+                                    fontSize: 14,
+                                  }}
+                                  {...rest}
+                                >
+                                  {children}
+                                </code>
+                              );
                             }
                           }}
-                          disabled={!selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer)}
-                          style={{
-                            marginTop: 8,
-                            background: "#1976d2",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 6,
-                            padding: "6px 18px",
-                            fontSize: 16,
-                            fontWeight: 500,
-                            cursor: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? "not-allowed" : "pointer",
-                            opacity: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? 0.6 : 1
-                          }}
-                        >提交</button>
-                        <button
-                          onClick={async () => {
-                            setShowHint(h => ({ ...h, [String(idx)]: true }));
-                            if (!q.hint) {
-                              const res = await fetch("/api/generate-hint", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ question: q.question_text, sectionContent: sec.content }),
-                              });
-                              const data = await res.json();
-                              setHint(h => ({ ...h, [String(idx)]: data.hint ?? null }));
-                            } else {
-                              setHint(h => ({ ...h, [String(idx)]: q.hint ?? null }));
-                            }
-                          }}
-                          style={{
-                            marginLeft: 8,
-                            background: "#fff",
-                            color: "#1976d2",
-                            border: "1px solid #1976d2",
-                            borderRadius: 6,
-                            padding: "6px 18px",
-                            fontSize: 16,
-                            fontWeight: 500,
-                            cursor: showHint[String(idx)] ? "not-allowed" : "pointer",
-                            opacity: showHint[String(idx)] ? 0.6 : 1
-                          }}
-                          disabled={showHint[String(idx)]}
-                        >提示</button>
-                        {showHint[String(idx)] && <div style={{ color: "#1976d2", marginTop: 8 }}>{hint[String(idx)] || q.hint}</div>}
-                        {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && (
-                          <div style={{ marginTop: 8, color: "#388e3c", fontWeight: 500 }}>
-                            恭喜答對了！✅
-                          </div>
-                        )}
-                        {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && qidx < sec.questions.length - 1 && (
-                          <button
-                            onClick={() => {
-                              setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: qidx + 1 }));
-                              setSelectedOption(s => ({ ...s, [String(idx)]: null }));
-                              setSubmitted(s => {
-                                const newS = { ...s };
-                                delete newS[String(idx)];
-                                Object.keys(newS).forEach((k: string) => {
-                                  if (k.startsWith(String(idx) + "_")) delete newS[k];
-                                });
-                                return newS;
-                              });
-                              setShowHint(h => ({ ...h, [String(idx)]: false }));
-                              setHint(h => ({ ...h, [String(idx)]: null }));
-                            }}
-                            style={{
-                              marginTop: 8,
-                              background: "#388e3c",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 6,
-                              padding: "6px 18px",
-                              fontSize: 16,
-                              fontWeight: 500,
-                              cursor: "pointer"
-                            }}
-                          >下一題</button>
-                        )}
+                        >
+                          {sec.content}
+                        </ReactMarkdown>
                       </div>
-                    );
-                  })()}
-                </div>
+                    : loadingStep === "sections"
+                      ? <BlinkingBlank width="90%" height={24} />
+                      : null
+                  }
+                  {/* 章節內容失敗重試 */}
+                  {sec.error && sec.error.type === "section" && (
+                    <div style={{ color: "#d32f2f", margin: "12px 0" }}>
+                      章節內容產生失敗：{sec.error.message}
+                      <button
+                        style={{
+                          marginLeft: 12,
+                          background: "#fff",
+                          color: "#d32f2f",
+                          border: "1px solid #d32f2f",
+                          borderRadius: 6,
+                          padding: "4px 12px",
+                          cursor: "pointer"
+                        }}
+                        onClick={async () => {
+                          const newSections = [...sections];
+                          newSections[idx].error = {
+                            type: "section",
+                            message: sec.error?.message || "產生章節內容失敗",
+                            retrying: true
+                          };
+                          setSections(newSections);
+                          try {
+                            const data = await fetchWithRetry("/api/generate-section", { sectionTitle: sec.title, courseTitle: prompt });
+                            newSections[idx].content = data.content;
+                            newSections[idx].error = undefined;
+                            setSections([...newSections]);
+                          } catch (err) {
+                            newSections[idx].error = {
+                              type: "section",
+                              message: err instanceof Error ? err.message : "產生章節內容失敗",
+                              retrying: true
+                            };
+                            setSections([...newSections]);
+                          }
+                        }}
+                        disabled={sec.error.retrying}
+                      >重試</button>
+                      {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                    </div>
+                  )}
+                  {/* 影片 */}
+                  {sec.videoUrl
+                    ? (
+                      <iframe
+                        width="400"
+                        height="225"
+                        src={sec.videoUrl.replace("watch?v=", "embed/")}
+                        title={sec.title}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ margin: "16px 0", borderRadius: 8, border: "1px solid #ccc" }}
+                      />
+                    )
+                    : loadingStep === "videos" && <SkeletonBlock height={225} width={400} style={{ margin: "16px 0" }} />
+                  }
+                  {/* 影片失敗重試 */}
+                  {sec.error && sec.error.type === "video" && (
+                    <div style={{ color: "#d32f2f", margin: "12px 0" }}>
+                      影片產生失敗：{sec.error.message}
+                      <button
+                        style={{
+                          marginLeft: 12,
+                          background: "#fff",
+                          color: "#d32f2f",
+                          border: "1px solid #d32f2f",
+                          borderRadius: 6,
+                          padding: "4px 12px",
+                          cursor: "pointer"
+                        }}
+                        onClick={async () => {
+                          const newSections = [...sections];
+                          newSections[idx].error = {
+                            type: "video",
+                            message: sec.error?.message || "產生影片失敗",
+                            retrying: true
+                          };
+                          setSections(newSections);
+                          try {
+                            const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sec.title, sectionContent: sec.content });
+                            newSections[idx].videoUrl = data.videoUrl;
+                            newSections[idx].error = undefined;
+                            setSections([...newSections]);
+                          } catch (err) {
+                            newSections[idx].error = {
+                              type: "video",
+                              message: err instanceof Error ? err.message : "產生影片失敗",
+                              retrying: true
+                            };
+                            setSections([...newSections]);
+                          }
+                        }}
+                        disabled={sec.error.retrying}
+                      >重試</button>
+                      {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                    </div>
+                  )}
+                  {/* 題目 */}
+                  {sec.questions && sec.questions.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      {(() => {
+                        const qidx = currentQuestionIdx[String(idx)] ?? 0;
+                        const q = sec.questions[qidx];
+                        if (!q) return null;
+                        return (
+                          <div>
+                            <p style={{ fontWeight: 500 }}>{q.question_text}</p>
+                            {q.options?.map((opt, i) => {
+                              // 判斷是否為錯誤選項
+                              const isSelected = selectedOption[String(idx)] === opt;
+                              const isSubmitted = submitted[String(idx)];
+                              const isCorrect = opt === q.answer;
+                              const showError = isSubmitted && isSelected && !isCorrect;
+                              const showSuccess = isSubmitted && isSelected && isCorrect;
+                              return (
+                                <label
+                                  key={i}
+                                  style={{
+                                    marginRight: 12,
+                                    display: "block",
+                                    background: showError ? "#ffeaea" : showSuccess ? "#eaffea" : undefined,
+                                    borderRadius: 6,
+                                    padding: "4px 8px",
+                                    fontWeight: showSuccess ? 700 : undefined,
+                                    color: showError ? "#d32f2f" : showSuccess ? "#388e3c" : undefined,
+                                    border: showError ? "1px solid #d32f2f" : showSuccess ? "1px solid #388e3c" : "1px solid #eee"
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`q${idx}_${qidx}`}
+                                    value={opt}
+                                    checked={selectedOption[String(idx)] === opt}
+                                    onChange={() => setSelectedOption(s => ({ ...s, [String(idx)]: opt }))}
+                                    disabled={isSubmitted && isCorrect}
+                                    style={{ marginRight: 4 }}
+                                  />
+                                  <span style={{ display: "inline-block" }}>
+                                    <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
+                                  </span>
+                                  {showError && <span style={{ marginLeft: 8 }}>❌</span>}
+                                  {showSuccess && <span style={{ marginLeft: 8 }}>✅</span>}
+                                </label>
+                              );
+                            })}
+                            <button
+                              onClick={() => {
+                                if (selectedOption[String(idx)] === q.answer) {
+                                  setSubmitted(s => ({ ...s, [String(idx)]: true }));
+                                } else {
+                                  // 標記這個選項已經嘗試過，並清空選擇，讓使用者必須重新選
+                                  setSubmitted(s => ({ ...s, [String(idx) + "_" + selectedOption[String(idx)]!]: true }));
+                                  setSelectedOption(s => ({ ...s, [String(idx)]: null }));
+                                }
+                              }}
+                              disabled={!selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer)}
+                              style={{
+                                marginTop: 8,
+                                background: "#1976d2",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 6,
+                                padding: "6px 18px",
+                                fontSize: 16,
+                                fontWeight: 500,
+                                cursor: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? "not-allowed" : "pointer",
+                                opacity: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? 0.6 : 1
+                              }}
+                            >提交</button>
+                            <button
+                              onClick={async () => {
+                                setShowHint(h => ({ ...h, [String(idx)]: true }));
+                                if (!q.hint) {
+                                  const res = await fetch("/api/generate-hint", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ question: q.question_text, sectionContent: sec.content }),
+                                  });
+                                  const data = await res.json();
+                                  setHint(h => ({ ...h, [String(idx)]: data.hint ?? null }));
+                                } else {
+                                  setHint(h => ({ ...h, [String(idx)]: q.hint ?? null }));
+                                }
+                              }}
+                              style={{
+                                marginLeft: 8,
+                                background: "#fff",
+                                color: "#1976d2",
+                                border: "1px solid #1976d2",
+                                borderRadius: 6,
+                                padding: "6px 18px",
+                                fontSize: 16,
+                                fontWeight: 500,
+                                cursor: showHint[String(idx)] ? "not-allowed" : "pointer",
+                                opacity: showHint[String(idx)] ? 0.6 : 1
+                              }}
+                              disabled={showHint[String(idx)]}
+                            >提示</button>
+                            {showHint[String(idx)] && <div style={{ color: "#1976d2", marginTop: 8 }}>{hint[String(idx)] || q.hint}</div>}
+                            {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && (
+                              <div style={{ marginTop: 8, color: "#388e3c", fontWeight: 500 }}>
+                                恭喜答對了！✅
+                              </div>
+                            )}
+                            {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && qidx < sec.questions.length - 1 && (
+                              <button
+                                onClick={() => {
+                                  setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: qidx + 1 }));
+                                  setSelectedOption(s => ({ ...s, [String(idx)]: null }));
+                                  setSubmitted(s => {
+                                    const newS = { ...s };
+                                    delete newS[String(idx)];
+                                    Object.keys(newS).forEach((k: string) => {
+                                      if (k.startsWith(String(idx) + "_")) delete newS[k];
+                                    });
+                                    return newS;
+                                  });
+                                  setShowHint(h => ({ ...h, [String(idx)]: false }));
+                                  setHint(h => ({ ...h, [String(idx)]: null }));
+                                }}
+                                style={{
+                                  marginTop: 8,
+                                  background: "#388e3c",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  padding: "6px 18px",
+                                  fontSize: 16,
+                                  fontWeight: 500,
+                                  cursor: "pointer"
+                                }}
+                              >下一題</button>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {(!sec.questions || sec.questions.length === 0) && loadingStep === "questions" && <SkeletonBlock height={32} width="60%" />}
+                </>
               )}
-              {(!sec.questions || sec.questions.length === 0) && loadingStep === "questions" && <SkeletonBlock height={32} width="60%" />}
             </div>
           ))}
         </div>
@@ -638,4 +687,11 @@ export default function GenerateCourse() {
       )}
     </div>
   );
-} 
+}
+
+<style jsx global>{`
+  @keyframes blinking-blank {
+    0% { opacity: 0.3; }
+    100% { opacity: 1; }
+  }
+`}</style> 
