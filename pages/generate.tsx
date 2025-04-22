@@ -162,7 +162,11 @@ export default function GenerateCourse() {
         sectionArr[i].content = data.content;
         sectionArr[i].error = undefined;
       } catch (err) {
-        sectionArr[i].error = { type: "section", message: err instanceof Error ? err.message : "產生章節內容失敗" };
+        sectionArr[i].error = {
+          type: "section",
+          message: err instanceof Error ? err.message : "產生章節內容失敗",
+          retrying: true
+        };
       }
       setSections([...sectionArr]);
     }
@@ -175,7 +179,11 @@ export default function GenerateCourse() {
         sectionArr[i].videoUrl = data.videoUrl;
         sectionArr[i].error = undefined;
       } catch (err) {
-        sectionArr[i].error = { type: "video", message: err instanceof Error ? err.message : "產生影片失敗" };
+        sectionArr[i].error = {
+          type: "video",
+          message: err instanceof Error ? err.message : "產生影片失敗",
+          retrying: true
+        };
       }
       setSections([...sectionArr]);
     }
@@ -188,7 +196,11 @@ export default function GenerateCourse() {
         sectionArr[i].questions = data.questions;
         sectionArr[i].error = undefined;
       } catch (err) {
-        sectionArr[i].error = { type: "questions", message: err instanceof Error ? err.message : "產生題目失敗" };
+        sectionArr[i].error = {
+          type: "questions",
+          message: err instanceof Error ? err.message : "產生題目失敗",
+          retrying: true
+        };
       }
       setSections([...sectionArr]);
     }
@@ -342,7 +354,11 @@ export default function GenerateCourse() {
                     }}
                     onClick={async () => {
                       const newSections = [...sections];
-                      newSections[idx].error = { ...sec.error, retrying: true };
+                      newSections[idx].error = {
+                        type: "section",
+                        message: sec.error?.message || "產生章節內容失敗",
+                        retrying: true
+                      };
                       setSections(newSections);
                       try {
                         const data = await fetchWithRetry("/api/generate-section", { sectionTitle: sec.title, courseTitle: prompt });
@@ -350,7 +366,11 @@ export default function GenerateCourse() {
                         newSections[idx].error = undefined;
                         setSections([...newSections]);
                       } catch (err) {
-                        newSections[idx].error = { type: "section", message: err instanceof Error ? err.message : "產生章節內容失敗" };
+                        newSections[idx].error = {
+                          type: "section",
+                          message: err instanceof Error ? err.message : "產生章節內容失敗",
+                          retrying: true
+                        };
                         setSections([...newSections]);
                       }
                     }}
@@ -391,7 +411,11 @@ export default function GenerateCourse() {
                     }}
                     onClick={async () => {
                       const newSections = [...sections];
-                      newSections[idx].error = { ...sec.error, retrying: true };
+                      newSections[idx].error = {
+                        type: "video",
+                        message: sec.error?.message || "產生影片失敗",
+                        retrying: true
+                      };
                       setSections(newSections);
                       try {
                         const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sec.title, sectionContent: sec.content });
@@ -399,7 +423,11 @@ export default function GenerateCourse() {
                         newSections[idx].error = undefined;
                         setSections([...newSections]);
                       } catch (err) {
-                        newSections[idx].error = { type: "video", message: err instanceof Error ? err.message : "產生影片失敗" };
+                        newSections[idx].error = {
+                          type: "video",
+                          message: err instanceof Error ? err.message : "產生影片失敗",
+                          retrying: true
+                        };
                         setSections([...newSections]);
                       }
                     }}
@@ -438,7 +466,11 @@ export default function GenerateCourse() {
                     }}
                     onClick={async () => {
                       const newSections = [...sections];
-                      newSections[idx].error = { ...sec.error, retrying: true };
+                      newSections[idx].error = {
+                        type: "questions",
+                        message: sec.error?.message || "產生題目失敗",
+                        retrying: true
+                      };
                       setSections(newSections);
                       try {
                         const data = await fetchWithRetry("/api/generate-questions", { sectionTitle: sec.title, sectionContent: sec.content });
@@ -446,7 +478,11 @@ export default function GenerateCourse() {
                         newSections[idx].error = undefined;
                         setSections([...newSections]);
                       } catch (err) {
-                        newSections[idx].error = { type: "questions", message: err instanceof Error ? err.message : "產生題目失敗" };
+                        newSections[idx].error = {
+                          type: "questions",
+                          message: err instanceof Error ? err.message : "產生題目失敗",
+                          retrying: true
+                        };
                         setSections([...newSections]);
                       }
                     }}
