@@ -124,11 +124,11 @@ export default function GenerateCourse() {
   const [sections, setSections] = useState<Section[]>([]);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
-  const [currentQuestionIdx, setCurrentQuestionIdx] = useState<{ [sectionIdx: number]: number }>({});
-  const [selectedOption, setSelectedOption] = useState<{ [sectionIdx: number]: string | null }>({});
-  const [submitted, setSubmitted] = useState<{ [sectionIdx: number]: boolean }>({});
-  const [showHint, setShowHint] = useState<{ [sectionIdx: number]: boolean }>({});
-  const [hint, setHint] = useState<{ [sectionIdx: number]: string | null }>({});
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState<{ [sectionIdx: string]: number }>({});
+  const [selectedOption, setSelectedOption] = useState<{ [sectionIdx: string]: string | null }>({});
+  const [submitted, setSubmitted] = useState<{ [sectionIdx: string]: boolean }>({});
+  const [showHint, setShowHint] = useState<{ [sectionIdx: string]: boolean }>({});
+  const [hint, setHint] = useState<{ [sectionIdx: string]: string | null }>({});
 
   // 分步產生主流程（含影片）
   const handleGenerate = async () => {
@@ -490,7 +490,7 @@ export default function GenerateCourse() {
               {sec.questions && sec.questions.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   {(() => {
-                    const qidx = currentQuestionIdx[idx] ?? 0;
+                    const qidx = currentQuestionIdx[String(idx)] ?? 0;
                     const q = sec.questions[qidx];
                     if (!q) return null;
                     return (
@@ -498,8 +498,8 @@ export default function GenerateCourse() {
                         <p style={{ fontWeight: 500 }}>{q.question_text}</p>
                         {q.options?.map((opt, i) => {
                           // 判斷是否為錯誤選項
-                          const isSelected = selectedOption[idx] === opt;
-                          const isSubmitted = submitted[idx];
+                          const isSelected = selectedOption[String(idx)] === opt;
+                          const isSubmitted = submitted[String(idx)];
                           const isCorrect = opt === q.answer;
                           const showError = isSubmitted && isSelected && !isCorrect;
                           const showSuccess = isSubmitted && isSelected && isCorrect;
@@ -521,8 +521,8 @@ export default function GenerateCourse() {
                                 type="radio"
                                 name={`q${idx}_${qidx}`}
                                 value={opt}
-                                checked={selectedOption[idx] === opt}
-                                onChange={() => setSelectedOption(s => ({ ...s, [idx]: opt }))}
+                                checked={selectedOption[String(idx)] === opt}
+                                onChange={() => setSelectedOption(s => ({ ...s, [String(idx)]: opt }))}
                                 disabled={isSubmitted && isCorrect}
                                 style={{ marginRight: 4 }}
                               />
@@ -536,15 +536,15 @@ export default function GenerateCourse() {
                         })}
                         <button
                           onClick={() => {
-                            if (selectedOption[idx] === q.answer) {
-                              setSubmitted(s => ({ ...s, [idx]: true }));
+                            if (selectedOption[String(idx)] === q.answer) {
+                              setSubmitted(s => ({ ...s, [String(idx)]: true }));
                             } else {
                               // 標記這個選項已經嘗試過，並清空選擇，讓使用者必須重新選
-                              setSubmitted(s => ({ ...s, [idx + "_" + selectedOption[idx]!]: true }));
-                              setSelectedOption(s => ({ ...s, [idx]: null }));
+                              setSubmitted(s => ({ ...s, [String(idx) + "_" + selectedOption[String(idx)]!]: true }));
+                              setSelectedOption(s => ({ ...s, [String(idx)]: null }));
                             }
                           }}
-                          disabled={!selectedOption[idx] || (submitted[idx] && selectedOption[idx] === q.answer)}
+                          disabled={!selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer)}
                           style={{
                             marginTop: 8,
                             background: "#1976d2",
@@ -554,13 +554,13 @@ export default function GenerateCourse() {
                             padding: "6px 18px",
                             fontSize: 16,
                             fontWeight: 500,
-                            cursor: !selectedOption[idx] || (submitted[idx] && selectedOption[idx] === q.answer) ? "not-allowed" : "pointer",
-                            opacity: !selectedOption[idx] || (submitted[idx] && selectedOption[idx] === q.answer) ? 0.6 : 1
+                            cursor: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? "not-allowed" : "pointer",
+                            opacity: !selectedOption[String(idx)] || (submitted[String(idx)] && selectedOption[String(idx)] === q.answer) ? 0.6 : 1
                           }}
                         >提交</button>
                         <button
                           onClick={async () => {
-                            setShowHint(h => ({ ...h, [idx]: true }));
+                            setShowHint(h => ({ ...h, [String(idx)]: true }));
                             if (!q.hint) {
                               const res = await fetch("/api/generate-hint", {
                                 method: "POST",
@@ -568,9 +568,9 @@ export default function GenerateCourse() {
                                 body: JSON.stringify({ question: q.question_text, sectionContent: sec.content }),
                               });
                               const data = await res.json();
-                              setHint(h => ({ ...h, [idx]: data.hint ?? null }));
+                              setHint(h => ({ ...h, [String(idx)]: data.hint ?? null }));
                             } else {
-                              setHint(h => ({ ...h, [idx]: q.hint ?? null }));
+                              setHint(h => ({ ...h, [String(idx)]: q.hint ?? null }));
                             }
                           }}
                           style={{
@@ -582,32 +582,32 @@ export default function GenerateCourse() {
                             padding: "6px 18px",
                             fontSize: 16,
                             fontWeight: 500,
-                            cursor: showHint[idx] ? "not-allowed" : "pointer",
-                            opacity: showHint[idx] ? 0.6 : 1
+                            cursor: showHint[String(idx)] ? "not-allowed" : "pointer",
+                            opacity: showHint[String(idx)] ? 0.6 : 1
                           }}
-                          disabled={showHint[idx]}
+                          disabled={showHint[String(idx)]}
                         >提示</button>
-                        {showHint[idx] && <div style={{ color: "#1976d2", marginTop: 8 }}>{hint[idx] || q.hint}</div>}
-                        {submitted[idx] && selectedOption[idx] === q.answer && (
+                        {showHint[String(idx)] && <div style={{ color: "#1976d2", marginTop: 8 }}>{hint[String(idx)] || q.hint}</div>}
+                        {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && (
                           <div style={{ marginTop: 8, color: "#388e3c", fontWeight: 500 }}>
                             恭喜答對了！✅
                           </div>
                         )}
-                        {submitted[idx] && selectedOption[idx] === q.answer && qidx < sec.questions.length - 1 && (
+                        {submitted[String(idx)] && selectedOption[String(idx)] === q.answer && qidx < sec.questions.length - 1 && (
                           <button
                             onClick={() => {
-                              setCurrentQuestionIdx(c => ({ ...c, [idx]: qidx + 1 }));
-                              setSelectedOption(s => ({ ...s, [idx]: null }));
+                              setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: qidx + 1 }));
+                              setSelectedOption(s => ({ ...s, [String(idx)]: null }));
                               setSubmitted(s => {
                                 const newS = { ...s };
-                                delete newS[idx];
-                                Object.keys(newS).forEach(k => {
-                                  if (k.startsWith(idx + "_")) delete newS[k];
+                                delete newS[String(idx)];
+                                Object.keys(newS).forEach((k: string) => {
+                                  if (k.startsWith(String(idx) + "_")) delete newS[k];
                                 });
                                 return newS;
                               });
-                              setShowHint(h => ({ ...h, [idx]: false }));
-                              setHint(h => ({ ...h, [idx]: null }));
+                              setShowHint(h => ({ ...h, [String(idx)]: false }));
+                              setHint(h => ({ ...h, [String(idx)]: null }));
                             }}
                             style={{
                               marginTop: 8,
