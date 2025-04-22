@@ -1,7 +1,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
 
 async function fetchWithRetry(api: string, body: Record<string, unknown>, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
   let lastErr;
@@ -360,7 +360,7 @@ export default function GenerateCourse() {
                           const match = /language-(\w+)/.exec(className || "");
                           return !isInline ? (
                             <SyntaxHighlighter
-                              style={vscDarkPlus}
+                              style={atomDark}
                               language={match?.[1] || "javascript"}
                               PreTag="div"
                               {...rest}
