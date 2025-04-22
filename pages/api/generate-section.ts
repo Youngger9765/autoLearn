@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messages: [
         { role: "system", content: sys_prompt }
       ],
-      model: "gpt-4.1-mini"
+      model: req.body.model || "gpt-4.1-mini"
     });
     const content = completion.choices[0].message.content;
     res.status(200).json({ content });

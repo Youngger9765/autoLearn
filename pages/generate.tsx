@@ -1,5 +1,43 @@
 import { useState } from "react";
 
+async function fetchWithRetry(api: string, body: any, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
+  let lastErr;
+  for (const model of models) {
+    try {
+      const res = await fetch(api, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, model }),
+      });
+      const data = await res.json();
+      if (res.ok) return data;
+      // 400 直接丟出，不 retry
+      if (res.status === 400) throw new Error(data.error || "參數錯誤");
+      lastErr = data.error || "API 請求失敗";
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : "API 請求失敗";
+    }
+  }
+  throw new Error(lastErr);
+}
+
+function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: number, width?: string | number, style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+        backgroundSize: "200% 100%",
+        animation: "skeleton-loading 1.2s infinite linear",
+        borderRadius: 6,
+        height,
+        width,
+        margin: "8px 0",
+        ...style,
+      }}
+    />
+  );
+}
+
 function ChatAssistant({ allContent }: { allContent: string }) {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [input, setInput] = useState("");
@@ -63,20 +101,26 @@ function ChatAssistant({ allContent }: { allContent: string }) {
 interface Section {
   title: string;
   content: string;
+  videoUrl?: string;
   questions: {
     question_text: string;
     options: string[];
   }[];
+  error?: {
+    type: "section" | "video" | "questions";
+    message: string;
+    retrying?: boolean;
+  }
 }
 
 export default function GenerateCourse() {
   const [prompt, setPrompt] = useState("");
-  const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "questions" | null>(null);
+  const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "videos" | "questions" | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
 
-  // 分步產生主流程
+  // 分步產生主流程（含影片）
   const handleGenerate = async () => {
     setError("");
     setSections([]);
@@ -100,50 +144,54 @@ export default function GenerateCourse() {
       return;
     }
 
-    // 2. 產生每章內容
+    // 2. 產生每章內容/影片/題目，逐一即時 render
     setLoadingStep("sections");
-    const sectionArr: Section[] = [];
+    const sectionArr: Section[] = outlineArr.map(title => ({
+      title,
+      content: "",
+      questions: [],
+      videoUrl: "",
+      error: undefined
+    }));
+    setSections([...sectionArr]);
     for (let i = 0; i < outlineArr.length; i++) {
       setProgress(i / outlineArr.length);
+      // 產生內容
       try {
-        const res = await fetch("/api/generate-section", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sectionTitle: outlineArr[i], courseTitle: prompt }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "產生章節內容失敗");
-        sectionArr.push({ title: outlineArr[i], content: data.content, questions: [] });
+        const data = await fetchWithRetry("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt });
+        sectionArr[i].content = data.content;
+        sectionArr[i].error = undefined;
       } catch (err) {
-        setError(err instanceof Error ? err.message : `產生章節「${outlineArr[i]}」內容失敗`);
-        setLoadingStep(null);
-        return;
+        sectionArr[i].error = { type: "section", message: err instanceof Error ? err.message : "產生章節內容失敗" };
       }
-      setProgress((i + 1) / outlineArr.length);
+      setSections([...sectionArr]);
     }
-    setSections(sectionArr);
-
-    // 3. 產生每章題目
+    setLoadingStep("videos");
+    for (let i = 0; i < outlineArr.length; i++) {
+      setProgress(i / outlineArr.length);
+      // 產生影片
+      try {
+        const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content });
+        sectionArr[i].videoUrl = data.videoUrl;
+        sectionArr[i].error = undefined;
+      } catch (err) {
+        sectionArr[i].error = { type: "video", message: err instanceof Error ? err.message : "產生影片失敗" };
+      }
+      setSections([...sectionArr]);
+    }
     setLoadingStep("questions");
-    for (let i = 0; i < sectionArr.length; i++) {
-      setProgress(i / sectionArr.length);
+    for (let i = 0; i < outlineArr.length; i++) {
+      setProgress(i / outlineArr.length);
+      // 產生題目
       try {
-        const res = await fetch("/api/generate-questions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "產生題目失敗");
+        const data = await fetchWithRetry("/api/generate-questions", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content });
         sectionArr[i].questions = data.questions;
+        sectionArr[i].error = undefined;
       } catch (err) {
-        setError(err instanceof Error ? err.message : `產生章節「${sectionArr[i].title}」題目失敗`);
-        setLoadingStep(null);
-        return;
+        sectionArr[i].error = { type: "questions", message: err instanceof Error ? err.message : "產生題目失敗" };
       }
-      setProgress((i + 1) / sectionArr.length);
+      setSections([...sectionArr]);
     }
-    setSections([...sectionArr]);
     setLoadingStep(null);
     setProgress(1);
   };
@@ -212,6 +260,7 @@ export default function GenerateCourse() {
           <div style={{ marginBottom: 8, color: "#1976d2", fontWeight: 500 }}>
             {loadingStep === "outline" && "正在產生課程大綱..."}
             {loadingStep === "sections" && "正在產生章節內容..."}
+            {loadingStep === "videos" && "正在產生章節影片..."}
             {loadingStep === "questions" && "正在產生章節題目..."}
           </div>
           <div style={{
@@ -268,18 +317,144 @@ export default function GenerateCourse() {
               background: "#fff",
               boxShadow: "0 1px 4px #0001"
             }}>
-              <h3 style={{ color: "#333", marginBottom: 8 }}>{sec.title}</h3>
-              <p style={{ color: "#444", marginBottom: 12 }}>{sec.content}</p>
-              {sec.questions?.map((q, qidx) => (
-                <div key={qidx} style={{ marginTop: 12 }}>
-                  <p style={{ fontWeight: 500 }}>{q.question_text}</p>
-                  {q.options?.map((opt, i) => (
-                    <label key={i} style={{ marginRight: 12 }}>
-                      <input type="radio" name={`q${idx}_${qidx}`} /> {opt}
-                    </label>
-                  ))}
+              {/* 標題 */}
+              <h3 style={{ color: "#333", marginBottom: 8 }}>
+                {sec.title || <SkeletonBlock width="40%" height={28} />}
+              </h3>
+              {/* 內容 */}
+              {sec.content
+                ? <p style={{ color: "#444", marginBottom: 12 }}>{sec.content}</p>
+                : loadingStep === "sections" && <SkeletonBlock width="90%" height={20} />
+              }
+              {/* 章節內容失敗重試 */}
+              {sec.error && sec.error.type === "section" && (
+                <div style={{ color: "#d32f2f", margin: "12px 0" }}>
+                  章節內容產生失敗：{sec.error.message}
+                  <button
+                    style={{
+                      marginLeft: 12,
+                      background: "#fff",
+                      color: "#d32f2f",
+                      border: "1px solid #d32f2f",
+                      borderRadius: 6,
+                      padding: "4px 12px",
+                      cursor: "pointer"
+                    }}
+                    onClick={async () => {
+                      const newSections = [...sections];
+                      newSections[idx].error = { ...sec.error, retrying: true };
+                      setSections(newSections);
+                      try {
+                        const data = await fetchWithRetry("/api/generate-section", { sectionTitle: sec.title, courseTitle: prompt });
+                        newSections[idx].content = data.content;
+                        newSections[idx].error = undefined;
+                        setSections([...newSections]);
+                      } catch (err) {
+                        newSections[idx].error = { type: "section", message: err instanceof Error ? err.message : "產生章節內容失敗" };
+                        setSections([...newSections]);
+                      }
+                    }}
+                    disabled={sec.error.retrying}
+                  >重試</button>
+                  {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
                 </div>
-              ))}
+              )}
+              {/* 影片 */}
+              {sec.videoUrl
+                ? (
+                  <iframe
+                    width="400"
+                    height="225"
+                    src={sec.videoUrl.replace("watch?v=", "embed/")}
+                    title={sec.title}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ margin: "16px 0", borderRadius: 8, border: "1px solid #ccc" }}
+                  />
+                )
+                : loadingStep === "videos" && <SkeletonBlock height={225} width={400} style={{ margin: "16px 0" }} />
+              }
+              {/* 影片失敗重試 */}
+              {sec.error && sec.error.type === "video" && (
+                <div style={{ color: "#d32f2f", margin: "12px 0" }}>
+                  影片產生失敗：{sec.error.message}
+                  <button
+                    style={{
+                      marginLeft: 12,
+                      background: "#fff",
+                      color: "#d32f2f",
+                      border: "1px solid #d32f2f",
+                      borderRadius: 6,
+                      padding: "4px 12px",
+                      cursor: "pointer"
+                    }}
+                    onClick={async () => {
+                      const newSections = [...sections];
+                      newSections[idx].error = { ...sec.error, retrying: true };
+                      setSections(newSections);
+                      try {
+                        const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sec.title, sectionContent: sec.content });
+                        newSections[idx].videoUrl = data.videoUrl;
+                        newSections[idx].error = undefined;
+                        setSections([...newSections]);
+                      } catch (err) {
+                        newSections[idx].error = { type: "video", message: err instanceof Error ? err.message : "產生影片失敗" };
+                        setSections([...newSections]);
+                      }
+                    }}
+                    disabled={sec.error.retrying}
+                  >重試</button>
+                  {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                </div>
+              )}
+              {/* 題目 */}
+              {sec.questions && sec.questions.length > 0
+                ? sec.questions.map((q, qidx) => (
+                  <div key={qidx} style={{ marginTop: 12 }}>
+                    <p style={{ fontWeight: 500 }}>{q.question_text}</p>
+                    {q.options?.map((opt, i) => (
+                      <label key={i} style={{ marginRight: 12 }}>
+                        <input type="radio" name={`q${idx}_${qidx}`} /> {opt}
+                      </label>
+                    ))}
+                  </div>
+                ))
+                : loadingStep === "questions" && <SkeletonBlock height={32} width="60%" />
+              }
+              {/* 題目失敗重試 */}
+              {sec.error && sec.error.type === "questions" && (
+                <div style={{ color: "#d32f2f", margin: "12px 0" }}>
+                  題目產生失敗：{sec.error.message}
+                  <button
+                    style={{
+                      marginLeft: 12,
+                      background: "#fff",
+                      color: "#d32f2f",
+                      border: "1px solid #d32f2f",
+                      borderRadius: 6,
+                      padding: "4px 12px",
+                      cursor: "pointer"
+                    }}
+                    onClick={async () => {
+                      const newSections = [...sections];
+                      newSections[idx].error = { ...sec.error, retrying: true };
+                      setSections(newSections);
+                      try {
+                        const data = await fetchWithRetry("/api/generate-questions", { sectionTitle: sec.title, sectionContent: sec.content });
+                        newSections[idx].questions = data.questions;
+                        newSections[idx].error = undefined;
+                        setSections([...newSections]);
+                      } catch (err) {
+                        newSections[idx].error = { type: "questions", message: err instanceof Error ? err.message : "產生題目失敗" };
+                        setSections([...newSections]);
+                      }
+                    }}
+                    disabled={sec.error.retrying}
+                  >重試</button>
+                  {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                </div>
+              )}
             </div>
           ))}
         </div>
