@@ -84,9 +84,18 @@ export default function GenerateCourse() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const data = await res.json();
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        // 不是 JSON，直接讀取文字內容
+        const text = await res.text();
+        setError(`API 回傳非 JSON 格式：${text}`);
+        console.error("API 非 JSON 回應：", text);
+        return;
+      }
       if (!res.ok) {
-        // 顯示後端回傳的 error detail
         setError(data.error || "API 請求失敗");
         console.error("API error detail:", data.error);
         return;
