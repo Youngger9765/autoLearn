@@ -348,7 +348,7 @@ export default function GenerateCourse() {
                 ? <div style={{ color: "#444", marginBottom: 12 }}>
                     <ReactMarkdown
                       components={{
-                        code({ node, inline, className, children, ...props }) {
+                        code({ inline, className, children, ...props }) {
                           const match = /language-(\w+)/.exec(className || "");
                           return !inline ? (
                             <SyntaxHighlighter
@@ -493,7 +493,6 @@ export default function GenerateCourse() {
                           const isSelected = selectedOption[idx] === opt;
                           const isSubmitted = submitted[idx];
                           const isCorrect = opt === q.answer;
-                          const tried = (submitted[idx + "_" + opt] ?? false); // 記錄每個選項是否被嘗試過
                           const showError = isSubmitted && isSelected && !isCorrect;
                           const showSuccess = isSubmitted && isSelected && isCorrect;
                           return (
