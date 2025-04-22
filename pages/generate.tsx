@@ -568,9 +568,9 @@ export default function GenerateCourse() {
                                 body: JSON.stringify({ question: q.question_text, sectionContent: sec.content }),
                               });
                               const data = await res.json();
-                              setHint(h => ({ ...h, [idx]: data.hint }));
+                              setHint(h => ({ ...h, [idx]: data.hint ?? null }));
                             } else {
-                              setHint(h => ({ ...h, [idx]: q.hint }));
+                              setHint(h => ({ ...h, [idx]: q.hint ?? null }));
                             }
                           }}
                           style={{
