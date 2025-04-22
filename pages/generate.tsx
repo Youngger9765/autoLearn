@@ -84,8 +84,13 @@ export default function GenerateCourse() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      if (!res.ok) throw new Error("API 請求失敗");
       const data = await res.json();
+      if (!res.ok) {
+        // 顯示後端回傳的 error detail
+        setError(data.error || "API 請求失敗");
+        console.error("API error detail:", data.error);
+        return;
+      }
       setCourse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "發生錯誤");
