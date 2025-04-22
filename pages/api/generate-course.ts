@@ -78,8 +78,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.status(200).json(data);
-  } catch (error: any) {
+  } catch (error) {
     console.error("API 產生課程錯誤：", error);
-    res.status(500).json({ error: error.message || "產生課程時發生錯誤" });
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message || "產生課程時發生錯誤" });
+    } else {
+      res.status(500).json({ error: "產生課程時發生錯誤" });
+    }
   }
 } 

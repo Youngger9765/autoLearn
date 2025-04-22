@@ -87,8 +87,8 @@ export default function GenerateCourse() {
       if (!res.ok) throw new Error("API 請求失敗");
       const data = await res.json();
       setCourse(data);
-    } catch (err: any) {
-      setError(err.message || "發生錯誤");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "發生錯誤");
       console.error("前端錯誤：", err);
     } finally {
       setLoading(false);
@@ -143,7 +143,7 @@ export default function GenerateCourse() {
         </div>
       )}
       {course && course.sections && (
-        <ChatAssistant allContent={course.sections.map((s: any) => `${s.title}\n${s.content}`).join('\n\n')} />
+        <ChatAssistant allContent={course.sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')} />
       )}
     </div>
   );

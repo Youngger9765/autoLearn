@@ -78,8 +78,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 回傳 thread id，前端要存下來
     res.status(200).json({ answer, threadId: thread_id });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Assistant API 錯誤：", error);
-    res.status(500).json({ error: error.message || "AI 助教回覆失敗" });
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message || "AI 助教回覆失敗" });
+    } else {
+      res.status(500).json({ error: "AI 助教回覆失敗" });
+    }
   }
 } 
