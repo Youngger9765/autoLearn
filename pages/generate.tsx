@@ -348,14 +348,16 @@ export default function GenerateCourse() {
                 ? <div style={{ color: "#444", marginBottom: 12 }}>
                     <ReactMarkdown
                       components={{
-                        code({ inline, className, children, ...props }) {
+                        code(props) {
+                          const { className, children, ...rest } = props;
+                          const isInline = (props as any).inline;
                           const match = /language-(\w+)/.exec(className || "");
-                          return !inline ? (
+                          return !isInline ? (
                             <SyntaxHighlighter
                               style={vscDarkPlus}
                               language={match?.[1] || "javascript"}
                               PreTag="div"
-                              {...props}
+                              {...rest}
                             >
                               {String(children).replace(/\n$/, "")}
                             </SyntaxHighlighter>
@@ -367,7 +369,7 @@ export default function GenerateCourse() {
                                 padding: "2px 4px",
                                 fontSize: 14,
                               }}
-                              {...props}
+                              {...rest}
                             >
                               {children}
                             </code>
