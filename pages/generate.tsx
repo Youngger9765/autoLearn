@@ -85,10 +85,10 @@ export default function GenerateCourse() {
         body: JSON.stringify({ prompt }),
       });
 
-      let data: any = null;
+      let data: unknown = null;
       try {
         data = await res.json();
-      } catch (jsonErr) {
+      } catch {
         // 不是 JSON，直接讀取文字內容
         const text = await res.text();
         setError(`API 回傳非 JSON 格式：${text}`);
@@ -96,11 +96,11 @@ export default function GenerateCourse() {
         return;
       }
       if (!res.ok) {
-        setError(data.error || "API 請求失敗");
-        console.error("API error detail:", data.error);
+        setError(data instanceof Error ? data.message : "API 請求失敗");
+        console.error("API error detail:", data);
         return;
       }
-      setCourse(data);
+      setCourse(data as Course);
     } catch (err) {
       setError(err instanceof Error ? err.message : "發生錯誤");
       console.error("前端錯誤：", err);
