@@ -71,7 +71,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const messages = await openai.beta.threads.messages.list(thread_id);
     const answer = messages.data
       .filter((msg) => msg.role === "assistant")
-      .map((msg) => msg.content.map((c: any) => c.text.value).join("\n"))
+      .map((msg) =>
+        (msg.content as Array<{ text: { value: string } }>).map((c) => c.text.value).join("\n")
+      )
       .join("\n");
 
     // 回傳 thread id，前端要存下來

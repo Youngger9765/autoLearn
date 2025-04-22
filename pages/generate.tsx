@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Course, Section, Question } from "../types"; // 路徑依你的專案結構調整
+import type { Course } from "../types"; // 路徑依你的專案結構調整
 
 function extractID(url: string) {
   // 支援多種 YouTube 連結格式

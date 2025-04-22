@@ -64,14 +64,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (data["課程標題"] && data["章節"]) {
       data = {
         title: data["課程標題"],
-        sections: (data["章節"] || []).map((sec: any, idx: number) => ({
+        sections: (data["章節"] || []).map((sec: Record<string, unknown>, idx: number) => ({
           id: idx,
-          title: sec["標題"],
-          content: sec["講義內容"],
-          youtube_url: sec["推薦影片"],
-          questions: (sec["選擇題"] || []).map((q: any) => ({
-            question_text: q["題目"],
-            options: q["選項"]
+          title: sec["標題"] as string,
+          content: sec["講義內容"] as string,
+          youtube_url: sec["推薦影片"] as string,
+          questions: (sec["選擇題"] as Array<Record<string, unknown>> || []).map((q) => ({
+            question_text: q["題目"] as string,
+            options: q["選項"] as string[]
           }))
         }))
       };
