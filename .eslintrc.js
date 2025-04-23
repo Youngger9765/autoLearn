@@ -1,5 +1,17 @@
 module.exports = {
-  // ... 其他配置 (extends, plugins, etc.)
+  extends: [
+    'next/core-web-vitals', // Next.js 核心規則
+    'plugin:@typescript-eslint/recommended', // TypeScript 推薦規則
+    // 你可能還有其他的 extends，例如 'prettier'
+  ],
+  plugins: [
+    '@typescript-eslint',
+    // 你可能還有其他的 plugins
+  ],
+  parser: '@typescript-eslint/parser', // 指定 TypeScript 解析器
+  parserOptions: {
+    project: './tsconfig.json', // 指向你的 tsconfig 文件
+  },
   rules: {
     // ... 其他規則
     '@typescript-eslint/no-explicit-any': 'off', // 完全關閉 any 檢查
