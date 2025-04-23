@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import supabase from '@/lib/supabase'; // 引入 Supabase client
+import supabase from '../../lib/supabase'; // 假設 lib 和 pages 在同一個父目錄下
 import { v4 as uuidv4 } from 'uuid'; // 引入 UUID
 
 // 定義前端傳來的資料結構 (根據之前的 API 和前端 state 推斷)
