@@ -304,75 +304,81 @@ export default function GenerateCourse() {
     setSections([...initialSections]);
     if (initialSections.length > 0) setExpandedSections({ '0': true });
 
-    // 2. 依序產生內容、影片、題目
-    const steps: ("sections" | "videos" | "questions")[] = ["sections", "videos", "questions"];
+    // 2. 依序產生每一個章節的內容、影片、題目
     const sectionArr = [...initialSections];
+    const totalSteps = outlineArr.length * 3 + 1; // 1 (大綱) + 每章 3 步
 
-    for (const step of steps) {
-      setLoadingStep(step);
+    let currentStep = 1; // 大綱已完成
+
     for (let i = 0; i < outlineArr.length; i++) {
-        const overallProgress = (steps.indexOf(step) * outlineArr.length + i) / (steps.length * outlineArr.length);
-        setProgress(overallProgress);
-
-        if ((step === 'videos' || step === 'questions') && (sectionArr[i].error?.type === 'section' || !sectionArr[i].content)) {
-           if (!sectionArr[i].error) {
+      // 2-1. 產生 section
+      setLoadingStep("sections");
+      setProgress(currentStep / totalSteps);
+      try {
+        const data = await fetchWithRetry("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
+        sectionArr[i].content = (data as { content: string }).content;
+        sectionArr[i].error = undefined;
+      } catch (err) {
         sectionArr[i].error = {
-               type: step,
-               message: `因章節內容${sectionArr[i].error ? '產生失敗' : '為空'}，已跳過${step === 'videos' ? '影片' : '題目'}產生`,
-               retrying: false
+          type: "section",
+          message: err instanceof Error ? err.message : "產生章節內容失敗",
+          retrying: false
         };
+        setSections([...sectionArr]);
+        currentStep += 3; // 跳過 video/questions
+        continue;
       }
       setSections([...sectionArr]);
-           continue;
-        }
+      currentStep++;
 
-        try {
-          let requestBody = {};
-          let apiUrl = "";
-          let data: unknown;
+      // 2-2. 產生 video
+      setLoadingStep("videos");
+      setProgress(currentStep / totalSteps);
+      try {
+        const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
+        sectionArr[i].videoUrl = (data as { videoUrl: string }).videoUrl;
+        sectionArr[i].error = undefined;
+      } catch (err) {
+        sectionArr[i].error = {
+          type: "video",
+          message: err instanceof Error ? err.message : "產生影片失敗",
+          retrying: false
+        };
+        setSections([...sectionArr]);
+        currentStep += 2; // 跳過 questions
+        continue;
+      }
+      setSections([...sectionArr]);
+      currentStep++;
 
-          switch (step) {
-            case "sections":
-              apiUrl = "/api/generate-section";
-              requestBody = { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience };
-              data = await fetchWithRetry(apiUrl, requestBody);
-              sectionArr[i].content = (data as { content: string }).content;
-              sectionArr[i].error = undefined;
-              break;
-            case "videos":
-              apiUrl = "/api/generate-video";
-              requestBody = { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience };
-              data = await fetchWithRetry(apiUrl, requestBody);
-              sectionArr[i].videoUrl = (data as { videoUrl: string }).videoUrl;
-              sectionArr[i].error = undefined;
-              break;
-            case "questions":
-              apiUrl = "/api/generate-questions";
-              const typesString = selectedQuestionTypes.join(",");
-              requestBody = {
+      // 2-3. 產生 questions
+      setLoadingStep("questions");
+      setProgress(currentStep / totalSteps);
+      try {
+        const typesString = selectedQuestionTypes.join(",");
+        const data = await fetchWithRetry("/api/generate-questions", {
           sectionTitle: sectionArr[i].title,
           sectionContent: sectionArr[i].content,
-                ...(targetAudience && { targetAudience }),
-                selectedQuestionTypes: typesString,
+          ...(targetAudience && { targetAudience }),
+          selectedQuestionTypes: typesString,
           numQuestions
-              };
-              data = await fetchWithRetry(apiUrl, requestBody);
-              sectionArr[i].questions = Array.isArray((data as { questions: unknown[] }).questions)
-                ? (data as { questions: Question[] }).questions
-                : [];
-              sectionArr[i].error = undefined;
-              break;
-          }
+        });
+        sectionArr[i].questions = Array.isArray((data as { questions: unknown[] }).questions)
+          ? (data as { questions: Question[] }).questions
+          : [];
+        sectionArr[i].error = undefined;
       } catch (err) {
-          console.error(`[Section ${i}] Error during step "${step}" for "${sectionArr[i].title}":`, err);
         sectionArr[i].error = {
-            type: step,
-            message: err instanceof Error ? err.message : `產生${step === 'sections' ? '章節內容' : step === 'videos' ? '影片' : '題目'}失敗`,
-            retrying: false
+          type: "questions",
+          message: err instanceof Error ? err.message : "產生題目失敗",
+          retrying: false
         };
+        setSections([...sectionArr]);
+        currentStep++;
+        continue;
       }
       setSections([...sectionArr]);
-    }
+      currentStep++;
     }
 
     setLoadingStep(null);
