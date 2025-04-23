@@ -2,7 +2,7 @@ import { useState, Fragment, CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
-import { type Question, type Section } from '@/types/course'; // 假設使用路徑別名 @/types
+import { type Section } from '@/types/course'; // 假設使用路徑別名 @/types
 import remarkGfm from 'remark-gfm';
 
 // --- Helper Functions & Components (使用內聯樣式) ---
@@ -160,8 +160,8 @@ function ChatAssistant({ allContent, targetAudience }: { allContent: string, tar
                  <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({node, ...props}) => <p style={{ marginBottom: '0.25rem' }} {...props} />,
-                      code: ({ node, className, children, ...props }) => {
+                      p: ({/* node, */ ...props}) => <p style={{ marginBottom: '0.25rem' }} {...props} />,
+                      code: ({ /* node, */ className, children, ...props }) => {
                         const match = /language-(\w+)/.exec(className || '');
                         return match ? (
                           <SyntaxHighlighter
@@ -178,10 +178,10 @@ function ChatAssistant({ allContent, targetAudience }: { allContent: string, tar
                           </code>
                         );
                       },
-                      table: ({node, ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid #d1d5db' }} {...props} />,
-                      thead: ({node, ...props}) => <thead style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db' }} {...props} />,
-                      th: ({node, ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.4rem 0.6rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
-                      td: ({node, ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.4rem 0.6rem' }} {...props} />,
+                      table: ({/* node, */ ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid #d1d5db' }} {...props} />,
+                      thead: ({/* node, */ ...props}) => <thead style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db' }} {...props} />,
+                      th: ({/* node, */ ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.4rem 0.6rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
+                      td: ({/* node, */ ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.4rem 0.6rem' }} {...props} />,
                     }}
                   >
               {msg.text}
