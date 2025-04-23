@@ -53,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // 第一次提問，傳 instructions
       run = await openai.beta.threads.runs.create(thread_id, {
         assistant_id: ASSISTANT_ID,
-        instructions: `以下是本次課程的所有內容，請根據這些內容回答學生問題，若內容不足請誠實說明：\n${allContent}${audienceInstruction}`,
+        instructions: `以下是本次課程的所有內容，請根據這些內容回答學生問題，請使用 zhTW 繁體中文回答，若內容不足請誠實說明：\n${allContent}${audienceInstruction}`,
       });
     } else {
       // 之後提問，不傳 instructions
