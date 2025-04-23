@@ -417,11 +417,11 @@ export default function GenerateCourse() {
           break;
       }
       setSections([...currentSections]); // 更新成功狀態
-      } catch (err) {
-      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, err);
+      } catch (error) {
+      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, error);
       sectionToRetry.error = {
         type: type,
-        message: err instanceof Error ? err.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
+        message: error instanceof Error ? error.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
         retrying: false // 重試失敗，設置為 false
       };
       setSections([...currentSections]); // 更新失敗狀態
@@ -568,12 +568,6 @@ export default function GenerateCourse() {
     marginTop: '1.5rem',
     paddingTop: '1.5rem',
     borderTop: '1px solid #e5e7eb', // 分隔線
-  };
-
-  const questionTextStyle: CSSProperties = {
-    fontWeight: 500,
-    color: '#1f2937',
-    marginBottom: '1rem',
   };
 
   // 選項標籤基礎樣式 - 使用獨立邊框屬性
