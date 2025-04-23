@@ -61,7 +61,7 @@ function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: n
 }
 
 // AI 助教元件 (使用內聯樣式)
-function ChatAssistant({ allContent, targetAudience }: { allContent: string, targetAudience: string }) {
+function ChatAssistant({ allContent, targetAudience, onClose }: { allContent: string, targetAudience: string, onClose?: () => void }) {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -157,7 +157,25 @@ function ChatAssistant({ allContent, targetAudience }: { allContent: string, tar
 
   return (
     <div style={assistantStyle}>
-      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem' }}>AI 助教</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', margin: 0 }}>
+          AI 助教
+        </h3>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '1.5rem',
+              color: '#6b7280',
+              cursor: 'pointer',
+              marginLeft: '0.5rem',
+            }}
+            title="關閉"
+          >✖️</button>
+        )}
+      </div>
       <div style={messagesContainerStyle}>
         {messages.length === 0 && !loading && (
           <p style={{ fontSize: '0.875rem', color: '#6b7280', textAlign: 'center', marginTop: '1rem' }}>請輸入問題與我互動</p>
@@ -262,6 +280,7 @@ export default function GenerateCourse() {
   const [targetAudience, setTargetAudience] = useState("");
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]);
   const [numQuestions, setNumQuestions] = useState(2);
+  const [showAssistant, setShowAssistant] = useState(false); // 新增：AI 助教展開/收合
 
   const isGenerating = !!loadingStep;
 
@@ -1238,12 +1257,44 @@ export default function GenerateCourse() {
         </div>
       )}
 
-      {/* AI 助教 (只有在產生內容後顯示) */}
+      {/* AI 助教浮動按鈕與展開視窗 */}
       {sections.length > 0 && !isGenerating && (
-        <ChatAssistant
-          allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')}
-          targetAudience={targetAudience}
-        />
+        <>
+          {showAssistant && (
+            <ChatAssistant
+              allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')}
+              targetAudience={targetAudience}
+              onClose={() => setShowAssistant(false)}
+            />
+          )}
+          {!showAssistant && (
+            <button
+              onClick={() => setShowAssistant(true)}
+              style={{
+                position: 'fixed',
+                bottom: '2.5rem',
+                right: '2.5rem',
+                zIndex: 100,
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2rem',
+                cursor: 'pointer',
+                transition: 'background 0.2s, box-shadow 0.2s',
+              }}
+              title="展開 AI 助教"
+            >
+              <span style={{ fontSize: '2.2rem' }}>🤖</span>
+            </button>
+          )}
+        </>
       )}
 
       {/* 全域樣式和動畫 */}
