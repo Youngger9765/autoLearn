@@ -2,7 +2,7 @@ import { useState, Fragment, CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
-import { type Section } from '@/types/course'; // 假設使用路徑別名 @/types
+import { type Question, type Section } from '@/types/course'; // 假設使用路徑別名 @/types
 import remarkGfm from 'remark-gfm';
 
 // --- Helper Functions & Components (使用內聯樣式) ---
@@ -21,6 +21,7 @@ async function fetchWithRetry(url: string, body: any, retries = 2, delay = 1000)
       }
       return await res.json();
     } catch (err) {
+      console.error(`Attempt ${i + 1} failed for ${url}:`, err);
       if (i === retries) throw err;
       await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
     }
@@ -1098,9 +1099,9 @@ export default function GenerateCourse() {
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            code({ node, inline, className, children, ...props }) {
+                            code({ /* node, inline, */ className, children, ...props }) {
                               const match = /language-(\w+)/.exec(className || '');
-                              return !inline && match ? (
+                              return match ? (
                                 <SyntaxHighlighter
                                   style={atomDark} language={match[1]} PreTag="div"
                                   customStyle={{ borderRadius: '4px', fontSize: '0.85rem', margin: '0.5rem 0' }}
@@ -1109,19 +1110,19 @@ export default function GenerateCourse() {
                                   {String(children).replace(/\n$/, '')}
                                 </SyntaxHighlighter>
                               ) : (
-                                <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} {...props}>
+                                <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} className={className} {...props}>
                                   {children}
                                 </code>
                               );
                             },
-                            p: ({node, ...props}) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
-                            ul: ({node, ...props}) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                            ol: ({node, ...props}) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                            li: ({node, ...props}) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
-                            table: ({node, ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
-                            thead: ({node, ...props}) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
-                            th: ({node, ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
-                            td: ({node, ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
+                            p: ({/* node, */ ...props}) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
+                            ul: ({/* node, */ ...props}) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                            ol: ({/* node, */ ...props}) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                            li: ({/* node, */ ...props}) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
+                            table: ({/* node, */ ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
+                            thead: ({/* node, */ ...props}) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
+                            th: ({/* node, */ ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
+                            td: ({/* node, */ ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
                           }}
                         >
                           {sec.content}
