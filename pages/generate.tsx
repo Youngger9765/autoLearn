@@ -1,139 +1,232 @@
-import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { useState, Fragment, CSSProperties } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
+import { type Question, type Section } from '../types/course'; // 確保類型定義路徑正確
+import remarkGfm from 'remark-gfm';
 
-async function fetchWithRetry(api: string, body: Record<string, unknown>, models = ["gpt-4.1-mini", "gpt-3.5-turbo"]) {
-  let lastErr;
-  for (const model of models) {
+// --- Helper Functions & Components (使用內聯樣式) ---
+
+async function fetchWithRetry(url: string, body: any, retries = 2, delay = 1000): Promise<any> {
+  for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(api, {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, model }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (res.ok) return data;
-      // 400 直接丟出，不 retry
-      if (res.status === 400) throw new Error(data.error || "參數錯誤");
-      lastErr = data.error || "API 請求失敗";
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `HTTP error ${res.status}` }));
+        throw new Error(errorData.error || `請求失敗，狀態碼: ${res.status}`);
+      }
+      return await res.json();
     } catch (err) {
-      lastErr = err instanceof Error ? err.message : "API 請求失敗";
+      if (i === retries) throw err;
+      await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
     }
   }
-  throw new Error(lastErr);
+  throw new Error("重試次數已用盡");
 }
 
-function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: number, width?: string | number, style?: React.CSSProperties }) {
+// 骨架屏元件 (使用內聯樣式和 style jsx)
+function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: number | string, width?: string | number, style?: CSSProperties }) {
   return (
-    <div
-      style={{
-        background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-        backgroundSize: "200% 100%",
-        animation: "skeleton-loading 1.2s infinite linear",
-        borderRadius: 6,
-        height,
-        width,
-        margin: "8px 0",
-        ...style,
-      }}
-    />
+    <>
+      <div
+        className="skeleton-block" // 使用 class name 配合 style jsx
+        style={{ height, width, ...style }}
+      />
+      {/* style jsx 放在父元件或全域 */}
+    </>
   );
 }
 
-function BlinkingBlank({ height = 24, width = "100%", style = {} }: { height?: number, width?: string | number, style?: React.CSSProperties }) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        animation: "blinking-blank 1s infinite alternate",
-        borderRadius: 6,
-        height,
-        width,
-        margin: "8px 0",
-        ...style,
-      }}
-    />
-  );
-}
-
-function ChatAssistant({ allContent, targetAudience }: { allContent: string, targetAudience?: string }) {
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
+// AI 助教元件 (使用內聯樣式)
+function ChatAssistant({ allContent, targetAudience }: { allContent: string, targetAudience: string }) {
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
-    setMessages(msgs => [...msgs, { role: "user", text: input }]);
+    const userMessage = { role: 'user' as const, text: input };
+    setMessages(msgs => [...msgs, userMessage]);
+    setInput("");
     setLoading(true);
+
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat", { // 確保 API 路徑正確
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allContent, question: input, threadId, targetAudience }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI 回應失敗");
+
       setMessages(msgs => [
         ...msgs,
         { role: "assistant", text: `${data.answer}` }
       ]);
       if (data.threadId) setThreadId(data.threadId);
-    } catch {
-      setMessages(msgs => [...msgs, { role: "assistant", text: "AI 助教暫時無法回應。" }]);
+    } catch (err) {
+       setMessages(msgs => [
+        ...msgs,
+        { role: "assistant", text: `抱歉，發生錯誤：${err instanceof Error ? err.message : '未知錯誤'}` }
+      ]);
     } finally {
-      setInput("");
       setLoading(false);
     }
   };
 
+  // AI 助教區樣式
+  const assistantStyle: CSSProperties = {
+    position: 'fixed',
+    top: '5rem', // 距離頂部距離
+    right: '1.5rem', // 距離右側距離
+    width: '320px', // 固定寬度
+    backgroundColor: '#ffffff',
+    borderRadius: '0.5rem', // 圓角
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', // 陰影
+    padding: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    height: 'calc(100vh - 7rem)', // 計算高度以填滿空間
+    zIndex: 50,
+    border: '1px solid #e5e7eb', // 邊框
+  };
+
+  const messagesContainerStyle: CSSProperties = {
+    flexGrow: 1,
+    overflowY: 'auto',
+    marginBottom: '0.75rem',
+    paddingRight: '0.5rem', // 留出滾動條空間
+  };
+
+  const inputAreaStyle: CSSProperties = {
+    display: 'flex',
+    gap: '0.5rem',
+    paddingTop: '0.75rem',
+    borderTop: '1px solid #e5e7eb',
+  };
+
+  const inputStyle: CSSProperties = {
+    flexGrow: 1,
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '0.375rem',
+    fontSize: '0.875rem',
+  };
+
+  const buttonStyle: CSSProperties = {
+    backgroundColor: '#2563eb', // 藍色背景
+    color: 'white',
+    fontWeight: 600,
+    padding: '0.5rem 1rem',
+    borderRadius: '0.375rem',
+    fontSize: '0.875rem',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  };
+
+  const disabledButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  };
+
   return (
-    <div style={{
-      position: "fixed", right: 24, top: 80, width: 320, background: "#fff",
-      border: "1px solid #ccc", borderRadius: 8, padding: 16, zIndex: 1000
-    }}>
-      <h3>AI 助教</h3>
-      <div style={{ maxHeight: 300, overflowY: "auto", marginBottom: 8 }}>
+    <div style={assistantStyle}>
+      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem' }}>AI 助教</h3>
+      <div style={messagesContainerStyle}>
+        {messages.length === 0 && !loading && (
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', textAlign: 'center', marginTop: '1rem' }}>請輸入問題與我互動</p>
+        )}
         {messages.map((msg, i) => (
-          <div key={i} style={{ textAlign: msg.role === "user" ? "right" : "left", margin: "8px 0" }}>
-            <span style={{ background: msg.role === "user" ? "#e0f7fa" : "#f1f8e9", padding: 6, borderRadius: 4 }}>
+          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '0.75rem' }}>
+            <div
+              style={{
+                padding: '0.5rem',
+                borderRadius: '0.5rem',
+                maxWidth: '85%',
+                fontSize: '0.875rem',
+                backgroundColor: msg.role === 'user' ? '#dbeafe' : '#f3f4f6', // 藍色/灰色背景
+                color: msg.role === 'user' ? '#1e3a8a' : '#1f2937', // 對應文字顏色
+              }}
+            >
+              {/* 使用 ReactMarkdown 渲染助理的回應 */}
+              {msg.role === 'assistant' ? (
+                 <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({node, ...props}) => <p style={{ marginBottom: '0.25rem' }} {...props} />,
+                      code: ({ node, inline, className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        return !inline && match ? (
+                          <SyntaxHighlighter
+                            style={atomDark} // 可以保持使用高亮樣式
+                            language={match[1]}
+                            PreTag="div"
+                            customStyle={{ fontSize: '0.8rem', borderRadius: '0.25rem', margin: '0.25rem 0' }} // 調整代碼塊樣式
+                            {...props}
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontSize: '0.8rem' }} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                      table: ({node, ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.85rem', border: '1px solid #d1d5db' }} {...props} />,
+                      thead: ({node, ...props}) => <thead style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db' }} {...props} />,
+                      th: ({node, ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.4rem 0.6rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
+                      td: ({node, ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.4rem 0.6rem' }} {...props} />,
+                    }}
+                  >
               {msg.text}
-            </span>
+                  </ReactMarkdown>
+              ) : (
+                msg.text // 使用者訊息直接顯示
+              )}
+            </div>
           </div>
         ))}
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+             <div style={{ padding: '0.5rem', borderRadius: '0.5rem', backgroundColor: '#f3f4f6', color: '#6b7280', fontSize: '0.875rem', fontStyle: 'italic' }}>
+               思考中...
       </div>
+          </div>
+        )}
+      </div>
+      <div style={inputAreaStyle}>
       <input
+          type="text"
         value={input}
         onChange={e => setInput(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && sendMessage()}
-        placeholder="請輸入問題"
-        style={{ width: "80%" }}
+          onKeyDown={e => e.key === 'Enter' && !loading && sendMessage()}
+          placeholder="輸入問題..."
+          style={inputStyle}
         disabled={loading}
       />
-      <button onClick={sendMessage} disabled={loading || !input.trim()} style={{ marginLeft: 8 }}>
+        <button
+          onClick={sendMessage}
+          disabled={loading || !input.trim()}
+          style={loading || !input.trim() ? disabledButtonStyle : buttonStyle}
+          onMouseOver={(e) => { if (!loading && input.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#1e40af'; }} // Hover 效果
+          onMouseOut={(e) => { if (!loading && input.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#1d4ed8'; }}
+        >
         送出
       </button>
+      </div>
     </div>
   );
 }
 
-interface Section {
-  title: string;
-  content: string;
-  videoUrl?: string;
-  questions: {
-    question_text: string;
-    options: string[];
-    answer: string;
-    hint?: string;
-  }[];
-  error?: {
-    type: "section" | "video" | "questions";
-    message: string;
-    retrying?: boolean;
-  }
-}
 
+// --- 主元件 ---
 export default function GenerateCourse() {
   const [prompt, setPrompt] = useState("");
   const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "videos" | "questions" | null>(null);
@@ -142,40 +235,44 @@ export default function GenerateCourse() {
   const [progress, setProgress] = useState(0);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState<{ [sectionIdx: string]: number }>({});
   const [selectedOption, setSelectedOption] = useState<{ [sectionIdx: string]: string | null }>({});
-  const [submitted, setSubmitted] = useState<{ [sectionIdx: string]: boolean }>({});
+  // submitted 狀態: true (答對), string (嘗試過的錯誤答案), undefined (未提交)
+  const [submitted, setSubmitted] = useState<{ [sectionIdx: string]: boolean | string }>({});
   const [showHint, setShowHint] = useState<{ [sectionIdx: string]: boolean }>({});
   const [hint, setHint] = useState<{ [sectionIdx: string]: string | null }>({});
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
   const [numSections, setNumSections] = useState(5);
   const [targetAudience, setTargetAudience] = useState("");
-  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]); // 預設選中選擇題
-  const [numQuestions, setNumQuestions] = useState(2); // 預設每章 2 題
+  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]);
+  const [numQuestions, setNumQuestions] = useState(2);
 
-  // 分步產生主流程（含影片）
+  const isGenerating = !!loadingStep;
+
+  // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
+  const totalSteps = numSections * 3 + 1;
+
+  // 分步產生主流程
   const handleGenerate = async () => {
     setError("");
     setSections([]);
     setProgress(0);
+    setExpandedSections({});
+    setCurrentQuestionIdx({});
+    setSelectedOption({});
+    setSubmitted({});
+    setShowHint({});
+    setHint({});
 
-    // --- 新增：在開始執行前再次檢查題目型態 ---
     if (selectedQuestionTypes.length === 0) {
       setError("請至少選擇一種題目型態再產生課程。");
-      setLoadingStep(null); // 確保沒有 loading 狀態殘留
-      return; // 提前返回，不執行後續步驟
+      setLoadingStep(null);
+      return;
     }
-    // --- 檢查結束 ---
 
     // 1. 產生大綱
     setLoadingStep("outline");
     let outlineArr: string[] = [];
     try {
-      const res = await fetch("/api/generate-outline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, numSections }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "產生大綱失敗");
+      const data = await fetchWithRetry("/api/generate-outline", { prompt, numSections });
       outlineArr = data.outline;
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
@@ -183,845 +280,977 @@ export default function GenerateCourse() {
       return;
     }
 
-    // 2. 產生每章內容/影片/題目，逐一即時 render
-    setLoadingStep("sections");
-    const sectionArr: Section[] = outlineArr.map(title => ({
-      title,
-      content: "",
-      questions: [],
-      videoUrl: "",
-      error: undefined
+    const initialSections: Section[] = outlineArr.map(title => ({
+      title, content: "", questions: [], videoUrl: "", error: undefined
     }));
-    setSections([...sectionArr]);
+    setSections([...initialSections]);
+    if (initialSections.length > 0) setExpandedSections({ '0': true });
+
+    // 2. 依序產生內容、影片、題目
+    const steps: ("sections" | "videos" | "questions")[] = ["sections", "videos", "questions"];
+    const sectionArr = [...initialSections];
+
+    for (const step of steps) {
+      setLoadingStep(step);
     for (let i = 0; i < outlineArr.length; i++) {
-      setProgress(i / outlineArr.length);
-      // 產生內容
-      try {
-        const data = await fetchWithRetry("/api/generate-section", {
-          sectionTitle: outlineArr[i],
-          courseTitle: prompt,
-          targetAudience
-        });
-        sectionArr[i].content = data.content;
-        sectionArr[i].error = undefined;
-      } catch (err) {
+        const overallProgress = (steps.indexOf(step) * outlineArr.length + i) / (steps.length * outlineArr.length);
+        setProgress(overallProgress);
+
+        if ((step === 'videos' || step === 'questions') && (sectionArr[i].error?.type === 'section' || !sectionArr[i].content)) {
+           if (!sectionArr[i].error) {
         sectionArr[i].error = {
-          type: "section",
-          message: err instanceof Error ? err.message : "產生章節內容失敗",
-          retrying: true
+               type: step,
+               message: `因章節內容${sectionArr[i].error ? '產生失敗' : '為空'}，已跳過${step === 'videos' ? '影片' : '題目'}產生`,
+               retrying: false
         };
       }
       setSections([...sectionArr]);
-    }
-    setLoadingStep("videos");
-    for (let i = 0; i < outlineArr.length; i++) {
-      setProgress(i / outlineArr.length);
-      // 產生影片
-      try {
-        const data = await fetchWithRetry("/api/generate-video", {
-          sectionTitle: sectionArr[i].title,
-          sectionContent: sectionArr[i].content,
-          targetAudience
-        });
+           continue;
+        }
+
+        try {
+          let requestBody: any = {};
+          let apiUrl = "";
+          let data: any;
+
+          switch (step) {
+            case "sections":
+              apiUrl = "/api/generate-section";
+              requestBody = { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience };
+              data = await fetchWithRetry(apiUrl, requestBody);
+              sectionArr[i].content = data.content;
+              sectionArr[i].error = undefined;
+              break;
+            case "videos":
+              apiUrl = "/api/generate-video";
+              requestBody = { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience };
+              data = await fetchWithRetry(apiUrl, requestBody);
         sectionArr[i].videoUrl = data.videoUrl;
         sectionArr[i].error = undefined;
-      } catch (err) {
-        sectionArr[i].error = {
-          type: "video",
-          message: err instanceof Error ? err.message : "產生影片失敗",
-          retrying: true
-        };
-      }
-      setSections([...sectionArr]);
-    }
-    setLoadingStep("questions");
-    for (let i = 0; i < outlineArr.length; i++) {
-      setProgress(i / outlineArr.length);
-      // 產生題目
-      if (sectionArr[i].error?.type === 'section' || !sectionArr[i].content) {
-          sectionArr[i].error = { // 標示題目也因內容失敗或為空而跳過
-              type: "questions",
-              message: sectionArr[i].error?.type === 'section'
-                       ? "因章節內容產生失敗，已跳過題目產生"
-                       : "因章節內容為空，已跳過題目產生",
-              retrying: false // 不需要重試按鈕
-          };
-          setSections([...sectionArr]);
-          continue; // 繼續下一個章節
-      }
-      try {
-        const typesString = selectedQuestionTypes.join(",");
-        // 加入日誌確認發送的字串
-        console.log(`[Section ${i}] Sending selectedQuestionTypes: "${typesString}"`);
-
-        const requestBody = {
+              break;
+            case "questions":
+              apiUrl = "/api/generate-questions";
+              const typesString = selectedQuestionTypes.join(",");
+              requestBody = {
           sectionTitle: sectionArr[i].title,
           sectionContent: sectionArr[i].content,
-          ...(targetAudience && { targetAudience }),
-          selectedQuestionTypes: typesString, // 使用變數
+                ...(targetAudience && { targetAudience }),
+                selectedQuestionTypes: typesString,
           numQuestions
-        };
-        console.log(`[Section ${i}] Generating questions with body:`, JSON.stringify(requestBody, null, 2));
-        const data = await fetchWithRetry("/api/generate-questions", requestBody);
-        // 確保回傳的是陣列
-        sectionArr[i].questions = Array.isArray(data.questions) ? data.questions : [];
+              };
+              data = await fetchWithRetry(apiUrl, requestBody);
+              sectionArr[i].questions = Array.isArray(data.questions) ? data.questions : [];
         sectionArr[i].error = undefined;
+              break;
+          }
       } catch (err) {
-        console.error(`[Section ${i}] Error generating questions for "${sectionArr[i].title}":`, err);
+          console.error(`[Section ${i}] Error during step "${step}" for "${sectionArr[i].title}":`, err);
         sectionArr[i].error = {
-          type: "questions",
-          message: err instanceof Error ? err.message : "產生題目失敗",
-          retrying: false
+            type: step,
+            message: err instanceof Error ? err.message : `產生${step === 'sections' ? '章節內容' : step === 'videos' ? '影片' : '題目'}失敗`,
+            retrying: false
         };
       }
       setSections([...sectionArr]);
     }
+    }
+
     setLoadingStep(null);
     setProgress(1);
-    // 預設展開第一個章節
-    if (sectionArr.length > 0) {
-      setExpandedSections({ '0': true });
+  };
+
+  // --- 重試邏輯 ---
+  const handleRetry = async (sectionIndex: number, type: "section" | "video" | "questions") => {
+    const currentSections = [...sections];
+    const sectionToRetry = currentSections[sectionIndex];
+
+    if (sectionToRetry.error) {
+      sectionToRetry.error.retrying = true;
+      setSections([...currentSections]);
+    } else {
+      console.warn(`Retrying ${type} for section ${sectionIndex} without an existing error.`);
+      return;
+    }
+
+    try {
+      let requestBody: any = {};
+      let apiUrl = "";
+      let data: any;
+
+      switch (type) {
+        case "section":
+          apiUrl = "/api/generate-section";
+          requestBody = { sectionTitle: sectionToRetry.title, courseTitle: prompt, targetAudience };
+          data = await fetchWithRetry(apiUrl, requestBody);
+          sectionToRetry.content = data.content;
+          sectionToRetry.error = undefined; // 清除錯誤
+          // 內容成功後，可能需要重置後續步驟的錯誤（如果有的話）
+          if (sectionToRetry.error?.type === 'video' || sectionToRetry.error?.type === 'questions') {
+              sectionToRetry.error = undefined;
+          }
+          break;
+        case "video":
+          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空");
+          apiUrl = "/api/generate-video";
+          requestBody = { sectionTitle: sectionToRetry.title, sectionContent: sectionToRetry.content, targetAudience };
+          data = await fetchWithRetry(apiUrl, requestBody);
+          sectionToRetry.videoUrl = data.videoUrl;
+          sectionToRetry.error = undefined;
+          break;
+        case "questions":
+          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空");
+          apiUrl = "/api/generate-questions";
+          const typesString = selectedQuestionTypes.join(",");
+          requestBody = {
+            sectionTitle: sectionToRetry.title,
+            sectionContent: sectionToRetry.content,
+            ...(targetAudience && { targetAudience }),
+            selectedQuestionTypes: typesString,
+            numQuestions
+          };
+          data = await fetchWithRetry(apiUrl, requestBody);
+          sectionToRetry.questions = Array.isArray(data.questions) ? data.questions : [];
+          sectionToRetry.error = undefined;
+          break;
+      }
+      setSections([...currentSections]); // 更新成功狀態
+    } catch (err) {
+      console.error(`[Section ${sectionIndex}] Error retrying step "${type}":`, err);
+      sectionToRetry.error = {
+        type: type,
+        message: err instanceof Error ? err.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
+        retrying: false // 重試失敗，設置為 false
+      };
+      setSections([...currentSections]); // 更新失敗狀態
     }
   };
 
-  return (
-    <div style={{ maxWidth: 700, margin: "0 auto", padding: 24, background: "#f5f7fa", minHeight: "100vh" }}>
-      <h1 style={{
-        fontSize: 32,
-        fontWeight: 700,
-        color: "#1976d2",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 8
-      }}>
-        <span role="img" aria-label="AI">🤖</span>
-        AI 產生課程
-      </h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>
-        輸入你想學的主題，AI 幫你自動生成課程大綱、講義與練習題！
-      </p>
+  // --- 樣式定義 ---
+  const containerStyle: CSSProperties = {
+    maxWidth: '800px', // 適中寬度
+    margin: '0 auto', // 置中
+    padding: '2rem', // 內邊距
+    backgroundColor: '#f0f4f8', // 淺灰藍背景
+    minHeight: '100vh',
+  };
 
-      {/* 輸入區塊 */}
-      <div style={{
-        background: "#f5f7fa",
-        borderRadius: 12,
-        boxShadow: "0 2px 8px #0001",
-        padding: 24,
-        marginBottom: 24
-      }}>
+  const cardStyle: CSSProperties = {
+    backgroundColor: '#ffffff',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    padding: '1.5rem',
+    marginBottom: '2rem', // 主要區塊間距
+  };
+
+  const inputLabelStyle: CSSProperties = {
+    display: 'block',
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    color: '#4b5563', // 深灰色
+    marginBottom: '0.25rem',
+  };
+
+  const inputStyle: CSSProperties = {
+    display: 'block',
+    width: '100%',
+    padding: '0.6rem 0.75rem',
+    fontSize: '1rem',
+    border: '1px solid #d1d5db', // 灰色邊框
+    borderRadius: '6px',
+    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+  };
+
+  const selectStyle: CSSProperties = {
+    ...inputStyle,
+    width: 'auto', // 下拉選單寬度自適應
+    minWidth: '120px',
+  };
+
+  const numberInputStyle: CSSProperties = {
+    ...inputStyle,
+    width: '80px', // 數字輸入框固定寬度
+  };
+
+  const checkboxLabelStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+  };
+
+  const generateButtonStyle: CSSProperties = {
+    backgroundColor: '#22c55e', // 綠色
+    color: 'white',
+    fontWeight: 600,
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.375rem',
+    fontSize: '1rem',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%', // 填滿容器寬度
+    marginTop: '1rem', // 與上方元素間距
+  };
+
+  const disabledButtonStyle: CSSProperties = {
+    // 繼承基礎樣式，但改變外觀表示禁用
+    // 注意：這裡不直接繼承 generateButtonStyle，因為 hover 效果不需要
+    backgroundColor: '#9ca3af', // 灰色背景表示禁用
+    color: '#e5e7eb', // 淺灰色文字
+    fontWeight: 600,
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.375rem',
+    fontSize: '1rem',
+    border: 'none',
+    cursor: 'not-allowed', // 禁用鼠標樣式
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: '1rem',
+    opacity: 0.6, // 降低透明度
+  };
+
+  const sectionCardStyle: CSSProperties = {
+    border: '1px solid #e5e7eb', // 統一邊框
+    borderRadius: '8px',
+    margin: '1.5rem 0', // 卡片間距
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)',
+    overflow: 'hidden', // 避免子元素溢出圓角
+  };
+
+  const sectionHeaderStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '1rem 1.5rem', // 標題區內邊距
+    cursor: 'pointer',
+    userSelect: 'none',
+    backgroundColor: '#f9fafb', // 淺灰色背景
+    borderBottom: '1px solid #e5e7eb', // 分隔線
+  };
+
+  const sectionTitleStyle: CSSProperties = {
+    color: '#111827', // 更深的標題顏色
+    margin: 0,
+    flex: 1,
+    fontWeight: 600, // 加粗
+    fontSize: '1.1rem', // 稍大字體
+  };
+
+  const sectionContentStyle: CSSProperties = {
+    padding: '1.5rem', // 內容區內邊距
+  };
+
+  const videoContainerStyle: CSSProperties = {
+    aspectRatio: '16 / 9', // 保持比例
+    width: '100%',
+    maxWidth: '640px', // 限制最大寬度
+    margin: '0 auto 1.5rem auto', // 置中並添加底部間距
+  };
+
+  const iframeStyle: CSSProperties = {
+    width: '100%',
+    height: '100%',
+    borderRadius: '8px', // 圓角
+    border: '1px solid #d1d5db', // 邊框
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)', // 陰影
+  };
+
+  const questionAreaStyle: CSSProperties = {
+    marginTop: '1.5rem',
+    paddingTop: '1.5rem',
+    borderTop: '1px solid #e5e7eb', // 分隔線
+  };
+
+  const questionTextStyle: CSSProperties = {
+    fontWeight: 500,
+    color: '#1f2937',
+    marginBottom: '1rem',
+  };
+
+  const optionLabelBaseStyle: CSSProperties = {
+    display: 'block',
+    marginBottom: '0.75rem',
+    borderRadius: '6px',
+    padding: '0.75rem 1rem',
+    border: '1px solid #d1d5db',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, border-color 0.2s',
+    backgroundColor: '#f9f9f9',
+  };
+
+  const optionLabelHoverStyle: CSSProperties = { // 僅用於未提交狀態
+     backgroundColor: '#f0f0f0',
+  };
+
+  const optionLabelSelectedStyle: CSSProperties = { // 選中但未提交
+    borderColor: '#60a5fa', // 藍色邊框
+    backgroundColor: '#eff6ff', // 淡藍色背景
+  };
+
+  const optionLabelCorrectStyle: CSSProperties = {
+    borderColor: '#34d399', // 綠色邊框
+    backgroundColor: '#f0fdf4', // 淡綠色背景
+    color: '#059669', // 深綠色文字
+    fontWeight: 600,
+    cursor: 'default',
+  };
+
+  const optionLabelIncorrectStyle: CSSProperties = {
+    borderColor: '#f87171', // 紅色邊框
+    backgroundColor: '#fef2f2', // 淡紅色背景
+    color: '#dc2626', // 深紅色文字
+    cursor: 'default',
+  };
+
+  const actionButtonStyle: CSSProperties = {
+    border: 'none',
+    borderRadius: '6px',
+    padding: '0.5rem 1.25rem',
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, opacity 0.2s',
+    marginRight: '0.75rem', // 按鈕間距
+  };
+
+  const submitButtonStyle: CSSProperties = {
+    ...actionButtonStyle,
+    backgroundColor: '#2563eb', // 藍色
+    color: 'white',
+  };
+
+  const hintButtonStyle: CSSProperties = {
+    ...actionButtonStyle,
+    backgroundColor: 'transparent',
+    color: '#2563eb', // 藍色文字
+    border: '1px solid #2563eb', // 藍色邊框
+  };
+
+   const nextButtonStyle: CSSProperties = {
+    ...actionButtonStyle,
+    backgroundColor: '#16a34a', // 綠色
+    color: 'white',
+  };
+
+  const disabledActionButtonStyle: CSSProperties = {
+    ...actionButtonStyle,
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  };
+
+  const feedbackBoxBaseStyle: CSSProperties = {
+      marginTop: '1rem',
+      padding: '0.75rem 1rem',
+      borderRadius: '6px',
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      border: '1px solid',
+  };
+
+  const feedbackCorrectStyle: CSSProperties = {
+      ...feedbackBoxBaseStyle,
+      backgroundColor: '#f0fdf4',
+      borderColor: '#a7f3d0',
+      color: '#047857',
+  };
+
+  const feedbackIncorrectStyle: CSSProperties = {
+      ...feedbackBoxBaseStyle,
+      backgroundColor: '#fef2f2',
+      borderColor: '#fecaca',
+      color: '#b91c1c',
+  };
+
+  const hintBoxStyle: CSSProperties = {
+      ...feedbackBoxBaseStyle,
+      backgroundColor: '#eff6ff',
+      borderColor: '#bfdbfe',
+      color: '#1d4ed8',
+  };
+
+  const errorBoxStyle: CSSProperties = {
+      backgroundColor: '#fef2f2', // 淡紅色背景
+      border: '1px solid #fecaca', // 紅色邊框
+      color: '#b91c1c', // 深紅色文字
+      padding: '0.75rem 1rem',
+      borderRadius: '6px',
+      marginBottom: '1rem',
+      fontSize: '0.875rem',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+  };
+
+  const retryButtonStyle: CSSProperties = {
+      marginLeft: '0.75rem',
+      backgroundColor: 'white',
+      color: '#b91c1c',
+      border: '1px solid #b91c1c',
+      borderRadius: '4px',
+      padding: '0.25rem 0.5rem',
+      fontSize: '0.75rem',
+      fontWeight: 600,
+      cursor: 'pointer',
+      transition: 'background-color 0.2s',
+  };
+
+  const disabledRetryButtonStyle: CSSProperties = {
+      ...retryButtonStyle,
+      opacity: 0.5,
+      cursor: 'not-allowed',
+  };
+
+  const titleStyle: CSSProperties = {
+    fontSize: '2rem',
+        fontWeight: 700,
+    color: '#1f2937',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    marginBottom: '0.5rem'
+  };
+
+  const subtitleStyle: CSSProperties = {
+    color: '#4b5563'
+  };
+
+  // --- 計算進度百分比 (修正) ---
+  const currentProgressValue = totalSteps > 0 ? Math.round((progress / totalSteps) * 100) : 0;
+  // --- 結束修正 ---
+
+  return (
+    <div style={containerStyle}>
+      {/* 標題區 */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={titleStyle}>
+          <span role="img" aria-label="AI" style={{ fontSize: '2.2rem', marginRight: '0.75rem' }}>🤖</span>
+          AI 課程產生器
+      </h1>
+        <p style={subtitleStyle}>
+          輸入你想學習的主題，AI 將自動為你生成課程大綱、詳細講義、教學影片與隨堂練習題！
+        </p>
+      </div>
+
+      {/* 課程輸入區 */}
+      <div style={cardStyle}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}> {/* 預設單欄 */}
+          {/* 主題輸入 */}
+          <div>
+            <label htmlFor="prompt" style={inputLabelStyle}>
+              課程主題 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(例如：Python 入門、數據分析基礎)</span>
+            </label>
         <input
           type="text"
+              id="prompt"
           value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="請輸入課程主題（如：AI、行銷、Python...）"
-          style={{
-            width: "70%",
-            padding: 10,
-            fontSize: 18,
-            border: "1px solid #bbb",
-            borderRadius: 6,
-            marginRight: 12
-          }}
-        />
-        {/* 進階設定區塊 */}
-        <div style={{ display: "flex", gap: 16, marginTop: 16, marginBottom: 16, alignItems: "center" }}>
-          <div>
-            <label htmlFor="numSections" style={{ marginRight: 8, color: "#555" }}>章節數:</label>
-            <input
-              id="numSections"
-              type="number"
-              min="3"
-              max="10"
-              value={numSections}
-              onChange={e => {
-                const val = parseInt(e.target.value, 10);
-                // 如果轉換結果不是 NaN，才更新 state
-                if (!isNaN(val)) {
-                  setNumSections(val);
-                } else if (e.target.value === '') {
-                  // 允許清空，但 state 可能需要處理空值或維持最小值
-                  // 這裡暫時設為最小值 3，避免 NaN
-                  setNumSections(3);
-                }
-              }}
-              style={{ padding: "6px 8px", borderRadius: 4, border: "1px solid #bbb", width: 60 }}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="輸入你想學習的主題..."
+              style={inputStyle}
+              disabled={isGenerating}
             />
           </div>
+
+          {/* 進階設定 (桌面版可能多欄) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
+            {/* 目標年級 */}
           <div>
-            <label htmlFor="targetAudience" style={{ marginRight: 8, color: "#555" }}>年級:</label>
+              <label htmlFor="targetAudience" style={inputLabelStyle}>目標年級</label>
             <select
               id="targetAudience"
               value={targetAudience}
-              onChange={e => setTargetAudience(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 4, border: "1px solid #bbb", minWidth: 80 }}
-            >
-              <option value="">-- 請選擇 --</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(grade => (
-                <option key={grade} value={String(grade)}>{grade} 年級</option>
-              ))}
-              <option value="other">其他</option>
+                onChange={(e) => setTargetAudience(e.target.value)}
+                style={selectStyle}
+                disabled={isGenerating}
+              >
+                <option value="">-- 通用 --</option>
+                <option value="國小低年級">國小低年級</option>
+                <option value="國小中年級">國小中年級</option>
+                <option value="國小高年級">國小高年級</option>
+                <option value="國中生">國中生</option>
+                <option value="高中生">高中生</option>
+                <option value="大學生">大學生</option>
+                <option value="社會人士">社會人士</option>
             </select>
           </div>
-          {/* 題數設定 */}
+
+            {/* 章節數 */}
           <div>
-            <label htmlFor="numQuestions" style={{ marginRight: 8, color: "#555" }}>每章題數:</label>
+              <label htmlFor="numSections" style={inputLabelStyle}>章節數 (3-10)</label>
             <input
-              id="numQuestions"
               type="number"
-              min="1"
-              max="5" // 可依需求調整上限
+                id="numSections"
+                value={numSections}
+                onChange={(e) => setNumSections(Math.max(3, Math.min(10, parseInt(e.target.value, 10) || 3)))}
+                min="3" max="10"
+                style={numberInputStyle}
+                disabled={isGenerating}
+              />
+            </div>
+
+            {/* 每章題數 */}
+            <div>
+              <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
+              <input
+                type="number"
+                id="numQuestions"
               value={numQuestions}
-              onChange={e => {
-                const val = parseInt(e.target.value, 10);
-                // 如果轉換結果不是 NaN，才更新 state
-                if (!isNaN(val)) {
-                  setNumQuestions(val);
-                } else if (e.target.value === '') {
-                   // 允許清空，但 state 可能需要處理空值或維持最小值
-                   // 這裡暫時設為最小值 1，避免 NaN
-                  setNumQuestions(1);
-                }
-              }}
-              style={{ padding: "6px 8px", borderRadius: 4, border: "1px solid #bbb", width: 60 }}
+                onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
+                min="1" max="5"
+                style={numberInputStyle}
+                disabled={isGenerating}
             />
           </div>
         </div>
-        {/* 題目型態設定 (移到下方獨立一行) */}
-        <div style={{ marginTop: 8, marginBottom: 16 }}>
-          <label style={{ marginRight: 16, color: "#555", fontWeight: 500 }}>題目型態:</label>
-          <label htmlFor="q_mc" style={{ marginRight: 16, cursor: 'pointer' }}>
+
+          {/* 題目型態 */}
+          <div>
+            <label style={inputLabelStyle}>題目型態 (可複選)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
+              {[
+                { label: "選擇題", value: "multiple_choice" },
+                { label: "是非題", value: "true_false" },
+                // { label: "簡答題", value: "short_answer" },
+              ].map((type) => (
+                <label key={type.value} style={checkboxLabelStyle}>
             <input
               type="checkbox"
-              id="q_mc"
-              value="multiple_choice"
-              checked={selectedQuestionTypes.includes("multiple_choice")}
-              onChange={e => {
-                const value = e.target.value;
+                    value={type.value}
+                    checked={selectedQuestionTypes.includes(type.value)}
+                    onChange={(e) => {
+                      const { value, checked } = e.target;
                 setSelectedQuestionTypes(prev =>
-                  e.target.checked ? [...prev, value] : prev.filter(t => t !== value)
+                        checked ? [...prev, value] : prev.filter(t => t !== value)
                 );
               }}
-              style={{ marginRight: 4 }}
+                    disabled={isGenerating}
+                    style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
             />
-            選擇題
+                  {type.label}
           </label>
-          <label htmlFor="q_tf" style={{ marginRight: 16, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              id="q_tf"
-              value="true_false"
-              checked={selectedQuestionTypes.includes("true_false")}
-              onChange={e => {
-                const value = e.target.value;
-                setSelectedQuestionTypes(prev =>
-                  e.target.checked ? [...prev, value] : prev.filter(t => t !== value)
-                );
-              }}
-              style={{ marginRight: 4 }}
-            />
-            是非題
-          </label>
-          {/* 可以繼續加其他題型 */}
+              ))}
         </div>
+          </div>
+
+          {/* 產生按鈕 */}
+          <div style={{ marginTop: '1rem' }}>
         <button
           onClick={handleGenerate}
-          disabled={loadingStep !== null || !prompt || selectedQuestionTypes.length === 0} // 確保至少選一種題型
-          style={{
-            padding: "10px 24px",
-            fontSize: 18,
-            background: "#1976d2",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: loadingStep !== null || !prompt || selectedQuestionTypes.length === 0 ? "not-allowed" : "pointer",
-            opacity: loadingStep !== null || !prompt || selectedQuestionTypes.length === 0 ? 0.6 : 1
-          }}
-        >
-          {loadingStep ? "產生中..." : "產生課程"}
+              disabled={isGenerating || !prompt.trim()}
+              style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
+              onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
+              onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
+            >
+              {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
         </button>
       </div>
+          </div>
+          </div>
 
-      {/* 進度條與 loading 狀態 */}
-      {loadingStep && (
-        <div style={{ margin: "24px 0" }}>
-          <div style={{ marginBottom: 8, color: "#1976d2", fontWeight: 500 }}>
-            {loadingStep === "outline" && "正在產生課程大綱..."}
-            {loadingStep === "sections" && "正在產生章節內容..."}
-            {loadingStep === "videos" && "正在產生章節影片..."}
-            {loadingStep === "questions" && "正在產生章節題目..."}
-          </div>
-          <div style={{
-            width: "100%",
-            height: 10,
-            background: "#e3e3e3",
-            borderRadius: 6,
-            overflow: "hidden"
-          }}>
-            <div style={{
-              width: `${Math.round(progress * 100)}%`,
-              height: "100%",
-              background: "#1976d2",
-              transition: "width 0.3s"
-            }} />
-          </div>
+      {/* 全局錯誤訊息 (非產生中) */}
+      {error && !isGenerating && (
+        <div style={errorBoxStyle}>
+          <span>{error}</span>
+          {/* 可以考慮是否需要全局重試按鈕 */}
         </div>
       )}
 
-      {/* 錯誤訊息 */}
-      {error && <div style={{
-        color: "#fff",
-        background: "#d32f2f",
-        padding: "12px 16px",
-        borderRadius: 8,
-        marginTop: 16,
-        fontWeight: 500
-      }}>
-        {error}
-        <button
-          onClick={handleGenerate}
-          style={{
-            marginLeft: 16,
-            background: "#fff",
-            color: "#d32f2f",
-            border: "1px solid #d32f2f",
-            borderRadius: 6,
-            padding: "4px 12px",
-            cursor: "pointer"
-          }}
-        >重試</button>
-      </div>}
+      {/* 進度條 */}
+      {isGenerating && (
+        <div style={{ margin: "1.5rem 0" }}>
+          <progress value={progress} max={totalSteps} style={{ width: '100%', height: '8px', appearance: 'none' }}>
+          </progress>
+          <p style={{ textAlign: 'center', fontSize: '0.875rem', color: '#4b5563', marginTop: '0.5rem' }}>
+            正在產生 {loadingStep}... ({currentProgressValue}%)
+          </p>
+        </div>
+      )}
 
       {/* 課程內容 */}
       {sections.length > 0 && (
-        <div style={{ marginTop: 32 }}>
-          <h2 style={{ color: "#1976d2", borderBottom: "2px solid #1976d2", paddingBottom: 4 }}>{prompt}</h2>
-          {sections.map((sec, idx) => (
-            <div key={sec.title} style={{
-              border: "1px solid #e3e3e3",
-              borderRadius: 10,
-              margin: "20px 0",
-              padding: 20,
-              background: "#fff",
-              boxShadow: "0 1px 4px #0001"
-            }}>
-              {/* 標題列，點擊可展開/收合 */}
+        <div style={{ marginTop: '2rem' }}>
+          {/* 課程標題 (可選) */}
+          {/* <h2 style={{ color: '#111827', borderBottom: '2px solid #9ca3af', paddingBottom: '0.5rem', marginBottom: '1rem' }}>{prompt}</h2> */}
+
+          {sections.map((sec, idx) => {
+            const isExpanded = expandedSections[String(idx)];
+            const isSectionLoading = loadingStep === 'sections' && !sec.content && !sec.error;
+            const currentQIdx = currentQuestionIdx[String(idx)] ?? 0;
+            const question = sec.questions?.[currentQIdx];
+            const submittedValue = submitted[String(idx)];
+            const isCorrectlySubmitted = submittedValue === true;
+
+            return (
+              <div key={idx} style={sectionCardStyle}>
+                {/* 標題列 */}
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  cursor: "pointer",
-                  userSelect: "none",
-                  marginBottom: 8
-                }}
-                onClick={() =>
-                  setExpandedSections(s => ({
-                    ...s,
-                    [String(idx)]: !s[String(idx)]
-                  }))
-                }
-              >
-                <h3 style={{ color: "#333", margin: 0, flex: 1 }}>
-                  {sec.title || <SkeletonBlock width="40%" height={28} />}
+                      ...sectionHeaderStyle,
+                      borderBottom: isExpanded ? '1px solid #e5e7eb' : 'none', // 收合時移除底線
+                  }}
+                  onClick={() => setExpandedSections(s => ({ ...s, [String(idx)]: !isExpanded }))}
+                >
+                  <h3 style={sectionTitleStyle}>
+                    {sec.title || <SkeletonBlock width="40%" height={24} style={{ backgroundColor: '#e5e7eb' }} />}
                 </h3>
-                {/* 在標題旁顯示載入狀態或錯誤提示 */}
-                {loadingStep === 'sections' && !sec.content && !sec.error && <SkeletonBlock width={20} height={20} style={{ margin: 0, marginLeft: 8 }} />}
-                {loadingStep === 'videos' && sec.content && !sec.videoUrl && !sec.error && <SkeletonBlock width={20} height={20} style={{ margin: 0, marginLeft: 8 }} />}
-                {loadingStep === 'questions' && sec.content && (!sec.questions || sec.questions.length === 0) && !sec.error && <SkeletonBlock width={20} height={20} style={{ margin: 0, marginLeft: 8 }} />}
-                {sec.error && <span style={{ color: '#d32f2f', marginLeft: 8, fontSize: 14 }}>⚠️</span>}
-                <span style={{
-                  fontSize: 20,
-                  marginLeft: 8,
-                  color: "#1976d2",
-                  transition: "transform 0.2s",
-                  transform: expandedSections[String(idx)] ? "rotate(90deg)" : "rotate(0deg)"
-                }}>
-                  ▶
-                </span>
+                  {/* 載入/錯誤指示 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
+                     {sec.error && <span title={sec.error.message} style={{ color: '#ef4444', fontSize: '1.1rem' }}>⚠️</span>}
+                     {isGenerating && !sec.error && (
+                       (loadingStep === 'sections' && !sec.content) ||
+                       (loadingStep === 'videos' && sec.content && !sec.videoUrl) ||
+                       (loadingStep === 'questions' && sec.content && (!sec.questions || sec.questions.length === 0))
+                     ) && <SkeletonBlock height={16} width={16} style={{ borderRadius: '50%', backgroundColor: '#d1d5db' }} />}
+                     <span style={{ fontSize: '1rem', color: '#6b7280', transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
               </div>
-              {/* 內容區塊，根據 expandedSections 決定是否顯示 */}
-              {expandedSections[String(idx)] && (
-                <>
-                  {/* 內容 */}
-                  {sec.content
-                    ? <div style={{ color: "#444", marginBottom: 12 }}>
+                </div>
+
+                {/* 卡片內容 (可展開) */}
+                {isExpanded && (
+                  <div style={sectionContentStyle}>
+                    {/* 內容錯誤與重試 */}
+                    {sec.error && sec.error.type === "section" && (
+                      <div style={errorBoxStyle}>
+                        <span>{sec.error.message}</span>
+                        <button
+                          onClick={() => handleRetry(idx, "section")}
+                          disabled={sec.error.retrying}
+                          style={sec.error.retrying ? disabledRetryButtonStyle : retryButtonStyle}
+                          onMouseOver={(e) => { if (!sec.error?.retrying) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
+                          onMouseOut={(e) => { if (!sec.error?.retrying) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
+                        >
+                          {sec.error.retrying ? "重試中..." : "重試"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 講義內容 */}
+                    {sec.content ? (
+                      <div style={{ color: "#374151", marginBottom: '1.5rem', lineHeight: 1.7 }}>
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
-                            code(
-                              props: {
-                                inline?: boolean;
-                                className?: string;
-                                children?: React.ReactNode;
-                              } & React.HTMLAttributes<HTMLElement>
-                            ) {
-                              const { className, children, inline, ...rest } = props;
-                              const isInline = inline;
-                              const match = /language-(\w+)/.exec(className || "");
-                              return !isInline ? (
+                            code({ node, inline, className, children, ...props }) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return !inline && match ? (
                                 <SyntaxHighlighter
-                                  style={atomDark}
-                                  language={match?.[1] || "javascript"}
-                                  PreTag="div"
-                                  {...rest}
+                                  style={atomDark} language={match[1]} PreTag="div"
+                                  customStyle={{ borderRadius: '4px', fontSize: '0.85rem', margin: '0.5rem 0' }}
+                                  {...props}
                                 >
-                                  {String(children).replace(/\n$/, "")}
+                                  {String(children).replace(/\n$/, '')}
                                 </SyntaxHighlighter>
                               ) : (
-                                <code
-                                  style={{
-                                    background: "#eee",
-                                    borderRadius: 4,
-                                    padding: "2px 4px",
-                                    fontSize: 14,
-                                  }}
-                                  {...rest}
-                                >
+                                <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} {...props}>
                                   {children}
                                 </code>
                               );
-                            }
+                            },
+                            p: ({node, ...props}) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
+                            ul: ({node, ...props}) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                            ol: ({node, ...props}) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                            li: ({node, ...props}) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
+                            table: ({node, ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
+                            thead: ({node, ...props}) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
+                            th: ({node, ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
+                            td: ({node, ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
                           }}
                         >
                           {sec.content}
                         </ReactMarkdown>
                       </div>
-                    : loadingStep === "sections"
-                      ? <BlinkingBlank width="90%" height={24} />
-                      : null
-                  }
-                  {/* 章節內容失敗重試 */}
-                  {sec.error && sec.error.type === "section" && (
-                    <div style={{ color: "#d32f2f", margin: "12px 0" }}>
-                      章節內容產生失敗：{sec.error.message}
+                    ) : isSectionLoading ? (
+                      <div style={{ marginBottom: '1.5rem' }}>
+                        <SkeletonBlock height={20} width="90%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
+                        <SkeletonBlock height={20} width="80%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
+                        <SkeletonBlock height={20} width="85%" style={{ backgroundColor: '#e5e7eb' }} />
+                      </div>
+                    ) : null}
+
+                    {/* 影片錯誤與重試 */}
+                    {sec.error && sec.error.type === "video" && (
+                       <div style={errorBoxStyle}>
+                        <span>{sec.error.message}</span>
                       <button
-                        style={{
-                          marginLeft: 12,
-                          background: "#fff",
-                          color: "#d32f2f",
-                          border: "1px solid #d32f2f",
-                          borderRadius: 6,
-                          padding: "4px 12px",
-                          cursor: "pointer"
-                        }}
-                        onClick={async () => {
-                          const newSections = [...sections];
-                          newSections[idx].error = {
-                            type: "section",
-                            message: sec.error?.message || "產生章節內容失敗",
-                            retrying: true
-                          };
-                          setSections(newSections);
-                          try {
-                            const data = await fetchWithRetry("/api/generate-section", { sectionTitle: sec.title, courseTitle: prompt, targetAudience });
-                            newSections[idx].content = data.content;
-                            newSections[idx].error = undefined;
-                            setSections([...newSections]);
-                          } catch (err) {
-                            newSections[idx].error = {
-                              type: "section",
-                              message: err instanceof Error ? err.message : "產生章節內容失敗",
-                              retrying: true
-                            };
-                            setSections([...newSections]);
-                          }
-                        }}
-                        disabled={sec.error.retrying}
-                      >重試</button>
-                      {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                          onClick={() => handleRetry(idx, "video")}
+                          disabled={sec.error.retrying || !sec.content}
+                          style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
+                          onMouseOver={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
+                          onMouseOut={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
+                        >
+                          {sec.error.retrying ? "重試中..." : "重試"}
+                        </button>
                     </div>
                   )}
-                  {/* 影片 */}
-                  {sec.videoUrl
-                    ? (
+
+                    {/* 影片區 */}
+                    {sec.videoUrl ? (
+                      <div style={videoContainerStyle}>
                       <iframe
-                        width="400"
-                        height="225"
+                          style={iframeStyle}
                         src={sec.videoUrl.replace("watch?v=", "embed/")}
                         title={sec.title}
                         frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
-                        style={{ margin: "16px 0", borderRadius: 8, border: "1px solid #ccc" }}
-                      />
-                    )
-                    : loadingStep === "videos" && <SkeletonBlock height={225} width={400} style={{ margin: "16px 0" }} />
-                  }
-                  {/* 影片失敗重試 */}
-                  {sec.error && sec.error.type === "video" && (
-                    <div style={{ color: "#d32f2f", margin: "12px 0" }}>
-                      影片產生失敗：{sec.error.message}
+                        />
+                      </div>
+                    ) : loadingStep === "videos" && sec.content && !sec.error ? (
+                       <div style={videoContainerStyle}>
+                         <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                       </div>
+                    ) : null}
+
+                    {/* 題目錯誤與重試 */}
+                    {sec.error && sec.error.type === "questions" && (
+                      <div style={errorBoxStyle}>
+                        <span>{sec.error.message}</span>
+                        {sec.error.message !== "因章節內容產生失敗，已跳過題目產生" &&
+                         sec.error.message !== "因章節內容為空，已跳過題目產生" && (
                       <button
-                        style={{
-                          marginLeft: 12,
-                          background: "#fff",
-                          color: "#d32f2f",
-                          border: "1px solid #d32f2f",
-                          borderRadius: 6,
-                          padding: "4px 12px",
-                          cursor: "pointer"
-                        }}
-                        onClick={async () => {
-                          const newSections = [...sections];
-                          newSections[idx].error = {
-                            type: "video",
-                            message: sec.error?.message || "產生影片失敗",
-                            retrying: true
-                          };
-                          setSections(newSections);
-                          try {
-                            const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sec.title, sectionContent: sec.content, targetAudience });
-                            newSections[idx].videoUrl = data.videoUrl;
-                            newSections[idx].error = undefined;
-                            setSections([...newSections]);
-                          } catch (err) {
-                            newSections[idx].error = {
-                              type: "video",
-                              message: err instanceof Error ? err.message : "產生影片失敗",
-                              retrying: true
-                            };
-                            setSections([...newSections]);
-                          }
-                        }}
-                        disabled={sec.error.retrying}
-                      >重試</button>
-                      {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
+                            onClick={() => handleRetry(idx, "questions")}
+                            disabled={sec.error.retrying || !sec.content}
+                            style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
+                            onMouseOver={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
+                            onMouseOut={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
+                          >
+                            {sec.error.retrying ? "重試中..." : "重試"}
+                          </button>
+                        )}
                     </div>
                   )}
-                  {/* 題目 */}
-                  {sec.content && !sec.error?.type && (
-                    <>
-                      {sec.questions && sec.questions.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          {(() => {
-                            const qidx = currentQuestionIdx[String(idx)] ?? 0;
-                            const q = sec.questions[qidx];
-                            if (!q) {
-                              console.error(`Question at index ${qidx} not found for section ${idx}`, sec.questions);
-                              return <div style={{ color: 'red', marginTop: 12 }}>錯誤：無法載入題目 {qidx + 1}</div>;
-                            }
-                            return (
-                              <div>
-                                <p style={{ fontWeight: 500 }}>
-                                  <ReactMarkdown components={{ p: 'span' }}>
-                                    {`${qidx + 1}. ${q.question_text}`}
-                                  </ReactMarkdown>
-                                </p>
-                                {/* 是非題選項 */}
-                                {q.options && q.options.length === 2 && q.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt)) ? (
-                                  ['是', '否'].map((opt, i) => { // 或者用 True/False
-                                    const isSelected = selectedOption[String(idx)] === opt;
-                                    const isSubmitted = submitted[String(idx)];
-                                    // 判斷答案時，需要處理 '是'/'True'/'對' 和 '否'/'False'/'錯' 的對應
-                                    const isCorrect = (opt === '是' && ['是', 'True', '對'].includes(q.answer)) ||
-                                                      (opt === '否' && ['否', 'False', '錯'].includes(q.answer));
-                                    const showError = isSubmitted && isSelected && !isCorrect;
-                                    const showSuccess = isSubmitted && isSelected && isCorrect;
-                                    return (
-                                      <label
-                                        key={i}
-                                        style={{
-                                          marginRight: 12,
-                                          display: "block", // 改為 block 讓選項垂直排列
-                                          marginBottom: 8, // 增加選項間距
-                                          background: showError ? "#ffeaea" : showSuccess ? "#eaffea" : "#f9f9f9",
-                                          borderRadius: 6,
-                                          padding: "8px 12px", // 增加內邊距
-                                          fontWeight: showSuccess ? 700 : 400,
-                                          color: showError ? "#d32f2f" : showSuccess ? "#388e3c" : "#333",
-                                          border: showError ? "1px solid #d32f2f" : showSuccess ? "1px solid #388e3c" : "1px solid #eee",
-                                          cursor: isSubmitted && isCorrect ? "default" : "pointer", // 答對後不可點
-                                          transition: "background 0.2s, border 0.2s",
-                                        }}
-                                      >
-                                        <input
-                                          type="radio"
-                                          name={`q${idx}_${qidx}`}
-                                          value={opt}
-                                          checked={isSelected}
-                                          onChange={() => setSelectedOption(s => ({ ...s, [String(idx)]: opt }))}
-                                          disabled={isSubmitted && isCorrect}
-                                          style={{ marginRight: 8 }} // 增加選項和文字間距
-                                        />
-                                        <span style={{ display: "inline-block" }}>
-                                          <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
-                                        </span>
-                                        {showError && <span style={{ marginLeft: 8, color: '#d32f2f' }}>❌ 錯誤</span>}
-                                        {showSuccess && <span style={{ marginLeft: 8, color: '#388e3c' }}>✅ 正確</span>}
-                                      </label>
-                                    );
-                                  })
-                                ) : (
-                                  /* 選擇題選項 */
-                                  q.options?.map((opt, i) => {
-                                    const isSelected = selectedOption[String(idx)] === opt;
-                                    const isSubmitted = submitted[String(idx)];
-                                    const isCorrect = opt === q.answer;
-                                    const showError = isSubmitted && isSelected && !isCorrect;
-                                    const showSuccess = isSubmitted && isSelected && isCorrect;
-                                    return (
-                                      <label
-                                        key={i}
-                                        style={{
-                                          marginRight: 12,
-                                          display: "block", // 改為 block 讓選項垂直排列
-                                          marginBottom: 8, // 增加選項間距
-                                          background: showError ? "#ffeaea" : showSuccess ? "#eaffea" : "#f9f9f9",
-                                          borderRadius: 6,
-                                          padding: "8px 12px", // 增加內邊距
-                                          fontWeight: showSuccess ? 700 : 400,
-                                          color: showError ? "#d32f2f" : showSuccess ? "#388e3c" : "#333",
-                                          border: showError ? "1px solid #d32f2f" : showSuccess ? "1px solid #388e3c" : "1px solid #eee",
-                                          cursor: isSubmitted && isCorrect ? "default" : "pointer", // 答對後不可點
-                                          transition: "background 0.2s, border 0.2s",
-                                        }}
-                                      >
-                                        <input
-                                          type="radio"
-                                          name={`q${idx}_${qidx}`}
-                                          value={opt}
-                                          checked={isSelected}
-                                          onChange={() => setSelectedOption(s => ({ ...s, [String(idx)]: opt }))}
-                                          disabled={isSubmitted && isCorrect}
-                                          style={{ marginRight: 8 }} // 增加選項和文字間距
-                                        />
-                                        <span style={{ display: "inline-block" }}>
-                                          <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
-                                        </span>
-                                        {showError && <span style={{ marginLeft: 8, color: '#d32f2f' }}>❌ 錯誤</span>}
-                                        {showSuccess && <span style={{ marginLeft: 8, color: '#388e3c' }}>✅ 正確</span>}
-                                      </label>
-                                    );
-                                  })
-                                )}
-                                {/* 提交/提示/下一題 按鈕 */}
-                                <div style={{ marginTop: 16 }}>
-                                  <button
-                                    onClick={() => {
-                                      // 判斷答案是否正確 (包含是非題的判斷)
-                                      const isAnswerCorrect = (q.options?.length === 2 && q.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt)))
-                                        ? (selectedOption[String(idx)] === '是' && ['是', 'True', '對'].includes(q.answer)) ||
-                                          (selectedOption[String(idx)] === '否' && ['否', 'False', '錯'].includes(q.answer))
-                                        : selectedOption[String(idx)] === q.answer;
 
-                                      if (isAnswerCorrect) {
-                                        setSubmitted(s => ({ ...s, [String(idx)]: true }));
-                                      } else {
-                                        // 標記這個選項已經嘗試過，並清空選擇，讓使用者必須重新選
-                                        setSubmitted(s => ({ ...s, [String(idx) + "_" + selectedOption[String(idx)]!]: true }));
-                                        setSelectedOption(s => ({ ...s, [String(idx)]: null }));
-                                      }
-                                    }}
-                                    disabled={!selectedOption[String(idx)] || (submitted[String(idx)])} // 只要提交過就 disable (無論對錯)，直到下一題
-                                    style={{
-                                      marginTop: 8,
-                                      background: "#1976d2",
-                                      color: "#fff",
-                                      border: "none",
-                                      borderRadius: 6,
-                                      padding: "6px 18px",
-                                      fontSize: 16,
-                                      fontWeight: 500,
-                                      cursor: !selectedOption[String(idx)] || (submitted[String(idx)]) ? "not-allowed" : "pointer",
-                                      opacity: !selectedOption[String(idx)] || (submitted[String(idx)]) ? 0.6 : 1
-                                    }}
-                                  >提交</button>
-                                  <button
-                                    onClick={async () => {
-                                      setShowHint(h => ({ ...h, [String(idx)]: true }));
-                                      if (!q.hint) {
-                                        const res = await fetch("/api/generate-hint", {
-                                          method: "POST",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({
-                                            question: q.question_text,
-                                            sectionContent: sec.content,
-                                            targetAudience
-                                          }),
-                                        });
-                                        const data = await res.json();
-                                        setHint(h => ({ ...h, [String(idx)]: data.hint ?? null }));
-                                      } else {
-                                        setHint(h => ({ ...h, [String(idx)]: q.hint ?? null }));
-                                      }
-                                    }}
-                                    style={{
-                                      marginLeft: 8,
-                                      background: "#fff",
-                                      color: "#1976d2",
-                                      border: "1px solid #1976d2",
-                                      borderRadius: 6,
-                                      padding: "6px 18px",
-                                      fontSize: 16,
-                                      fontWeight: 500,
-                                      cursor: showHint[String(idx)] ? "not-allowed" : "pointer",
-                                      opacity: showHint[String(idx)] ? 0.6 : 1
-                                    }}
-                                    disabled={showHint[String(idx)]}
-                                  >提示</button>
-                                  {/* 只有在答對時才顯示下一題按鈕 */}
-                                  {submitted[String(idx)] && selectedOption[String(idx)] && (
-                                    ( (q.options?.length === 2 && q.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt)))
-                                      ? (selectedOption[String(idx)] === '是' && ['是', 'True', '對'].includes(q.answer)) || (selectedOption[String(idx)] === '否' && ['否', 'False', '錯'].includes(q.answer))
-                                      : selectedOption[String(idx)] === q.answer
-                                    ) && qidx < sec.questions.length - 1 && (
-                                      <button
-                                        onClick={() => {
-                                          setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: qidx + 1 }));
-                                          setSelectedOption(s => ({ ...s, [String(idx)]: null }));
-                                          setSubmitted(s => {
-                                            const newS = { ...s };
-                                            delete newS[String(idx)];
-                                            Object.keys(newS).forEach((k: string) => {
-                                              if (k.startsWith(String(idx) + "_")) delete newS[k];
+                    {/* 練習題區 */}
+                  {sec.questions && sec.questions.length > 0 && (
+                      <div style={questionAreaStyle}>
+                        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>隨堂練習</h4>
+                      {(() => {
+                          if (!question) {
+                            if (currentQIdx >= sec.questions.length) {
+                              return <div style={feedbackCorrectStyle}>🎉 本章練習已完成！</div>;
+                            }
+                            console.error(`Question at index ${currentQIdx} not found for section ${idx}`, sec.questions);
+                            return <div style={feedbackIncorrectStyle}>錯誤：無法載入題目 {currentQIdx + 1}</div>;
+                          }
+
+                          const isTF = question.options && question.options.length === 2 && question.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
+                          const optionsToShow = isTF ? ['是', '否'] : question.options || [];
+                          const currentSelected = selectedOption[String(idx)];
+                          const isCorrectAnswer = isTF
+                              ? (currentSelected === '是' && ['是', 'True', '對'].includes(question.answer)) || (currentSelected === '否' && ['否', 'False', '錯'].includes(question.answer))
+                              : currentSelected === question.answer;
+
+                        return (
+                          <div>
+                              <p style={questionTextStyle}>
+                                <ReactMarkdown components={{ p: 'span' }}>
+                                  {`${currentQIdx + 1}. ${question.question_text}`}
+                                </ReactMarkdown>
+                              </p>
+
+                              <div style={{ marginBottom: '1rem' }}>
+                                {optionsToShow.map((opt, i) => {
+                                  const isSelected = currentSelected === opt;
+                                  const hasTriedIncorrectly = typeof submittedValue === 'string' && submittedValue === opt;
+                                  const showSuccess = isCorrectlySubmitted && isSelected; // 答對且選中
+                                  const showError = hasTriedIncorrectly; // 嘗試過這個錯誤選項
+
+                                  let currentStyle = { ...optionLabelBaseStyle };
+                                  if (isSelected && !submittedValue) currentStyle = { ...currentStyle, ...optionLabelSelectedStyle };
+                                  if (showSuccess) currentStyle = { ...currentStyle, ...optionLabelCorrectStyle };
+                                  if (showError) currentStyle = { ...currentStyle, ...optionLabelIncorrectStyle };
+                                  // 答對後，標示正確答案（即使未選中）
+                                  if (isCorrectlySubmitted && !isSelected && (isTF ? (opt === '是' && ['是', 'True', '對'].includes(question.answer)) || (opt === '否' && ['否', 'False', '錯'].includes(question.answer)) : opt === question.answer)) {
+                                      currentStyle = { ...currentStyle, ...optionLabelCorrectStyle, opacity: 0.7 }; // 稍微調暗非選中的正確答案
+                                  }
+
+                              return (
+                                <label
+                                  key={i}
+                                      style={currentStyle}
+                                      onMouseOver={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelHoverStyle.backgroundColor; }}
+                                      onMouseOut={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelBaseStyle.backgroundColor; }}
+                                >
+                                  <input
+                                    type="radio"
+                                        name={`q${idx}_${currentQIdx}`}
+                                    value={opt}
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          if (isCorrectlySubmitted) return; // 如果已答對，不允許更改
+
+                                          // 如果之前提交過錯誤答案 (submittedValue 是 string)，則重置 submitted 狀態
+                                          if (typeof submitted[String(idx)] === 'string') {
+                                            setSubmitted(s => {
+                                              const newState = { ...s };
+                                              delete newState[String(idx)]; // 重置為 undefined
+                                              return newState;
                                             });
-                                            return newS;
-                                          });
-                                          setShowHint(h => ({ ...h, [String(idx)]: false }));
-                                          setHint(h => ({ ...h, [String(idx)]: null }));
+                                          }
+                                          // 更新選擇的選項
+                                          setSelectedOption(s => ({ ...s, [String(idx)]: opt }));
                                         }}
-                                        style={{
-                                          marginTop: 8,
-                                          background: "#388e3c",
-                                          color: "#fff",
-                                          border: "none",
-                                          borderRadius: 6,
-                                          padding: "6px 18px",
-                                          fontSize: 16,
-                                          fontWeight: 500,
-                                          cursor: "pointer"
-                                        }}
-                                      >下一題</button>
-                                    )
-                                  )}
-                                </div>
-                                {showHint[String(idx)] && <div style={{ color: "#1976d2", marginTop: 8, background: '#e3f2fd', padding: '8px 12px', borderRadius: 6 }}><strong>提示：</strong>{hint[String(idx)] || q.hint}</div>}
-                                {/* 答對提示 */}
-                                {submitted[String(idx)] && selectedOption[String(idx)] && (
-                                  ( (q.options?.length === 2 && q.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt)))
-                                    ? (selectedOption[String(idx)] === '是' && ['是', 'True', '對'].includes(q.answer)) || (selectedOption[String(idx)] === '否' && ['否', 'False', '錯'].includes(q.answer))
-                                    : selectedOption[String(idx)] === q.answer
-                                  ) && (
-                                    <div style={{ marginTop: 12, color: "#388e3c", fontWeight: 500, background: '#e8f5e9', padding: '8px 12px', borderRadius: 6 }}>
-                                      恭喜答對了！✅
-                                      {qidx === sec.questions.length - 1 && <span> (本章結束)</span>}
-                                    </div>
-                                  )
-                                )}
-                                {/* 答錯提示 */}
-                                {submitted[String(idx)] && selectedOption[String(idx)] && !(
-                                  ( (q.options?.length === 2 && q.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt)))
-                                    ? (selectedOption[String(idx)] === '是' && ['是', 'True', '對'].includes(q.answer)) || (selectedOption[String(idx)] === '否' && ['否', 'False', '錯'].includes(q.answer))
-                                    : selectedOption[String(idx)] === q.answer
-                                  )
-                                ) && (
-                                  <div style={{ marginTop: 12, color: "#d32f2f", fontWeight: 500, background: '#ffebee', padding: '8px 12px', borderRadius: 6 }}>
-                                    答錯了，請再試一次或查看提示。❌
-                                  </div>
+                                        disabled={isCorrectlySubmitted}
+                                        style={{ marginRight: '0.75rem', verticalAlign: 'middle', width: '1rem', height: '1rem', accentColor: '#2563eb' }}
+                                      />
+                                      <span style={{ verticalAlign: 'middle' }}>
+                                    <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
+                                  </span>
+                                      {showSuccess && <span style={{ marginLeft: '0.5rem' }}>✅</span>}
+                                      {showError && <span style={{ marginLeft: '0.5rem' }}>❌</span>}
+                                </label>
+                              );
+                            })}
+                              </div>
+
+                              {/* 操作按鈕區 */}
+                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
+                            <button
+                              onClick={() => {
+                                    if (!currentSelected) return;
+                                    if (isCorrectAnswer) {
+                                  setSubmitted(s => ({ ...s, [String(idx)]: true }));
+                                } else {
+                                      setSubmitted(s => ({ ...s, [String(idx)]: currentSelected }));
+                                    }
+                                  }}
+                                  disabled={!currentSelected || isCorrectlySubmitted} // 移除 typeof submittedValue === 'string'
+                                  style={(!currentSelected || isCorrectlySubmitted) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
+                                >
+                                  提交答案
+                                </button>
+                            <button
+                              onClick={async () => {
+                                setShowHint(h => ({ ...h, [String(idx)]: true }));
+                                    if (!hint[String(idx)] && !question.hint) {
+                                      try {
+                                        const res = await fetch("/api/generate-hint", { /* ... body ... */ });
+                                  const data = await res.json();
+                                        setHint(h => ({ ...h, [String(idx)]: data.hint ?? "暫無提示" }));
+                                      } catch (err) { setHint(h => ({ ...h, [String(idx)]: "獲取提示失敗" })); }
+                                    }
+                                  }}
+                                  style={(showHint[String(idx)] || isCorrectlySubmitted) ? { ...hintButtonStyle, ...disabledActionButtonStyle } : hintButtonStyle}
+                                  disabled={showHint[String(idx)] || isCorrectlySubmitted}
+                                >
+                                  {showHint[String(idx)] ? "提示已顯示" : "需要提示"}
+                                </button>
+
+                                {/* 下一題按鈕 (答對時顯示) */}
+                                {isCorrectlySubmitted && currentQIdx < sec.questions.length - 1 && (
+                              <button
+                                    onClick={() => {
+                                      setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: currentQIdx + 1 }));
+                                  setSelectedOption(s => ({ ...s, [String(idx)]: null }));
+                                      setSubmitted(s => { const newS = { ...s }; delete newS[String(idx)]; return newS; });
+                                  setShowHint(h => ({ ...h, [String(idx)]: false }));
+                                  setHint(h => ({ ...h, [String(idx)]: null }));
+                                }}
+                                    style={nextButtonStyle}
+                                  >
+                                    下一題 →
+                                  </button>
                                 )}
                               </div>
-                            );
-                          })()}
-                        </div>
-                      )}
 
-                      {/* 題目載入失敗重試 */}
-                      {sec.error && sec.error.type === "questions" && (
-                        <div style={{ color: "#d32f2f", margin: "12px 0", background: '#ffebee', padding: '8px 12px', borderRadius: 6 }}>
-                          題目產生失敗：{sec.error.message}
-                          {/* 只有在非因內容失敗/為空導致時才顯示重試按鈕 */}
-                          {sec.error.message !== "因章節內容產生失敗，已跳過題目產生" &&
-                           sec.error.message !== "因章節內容為空，已跳過題目產生" && (
-                            <button
-                              style={{
-                                marginLeft: 12,
-                                background: "#fff",
-                                color: "#d32f2f",
-                                border: "1px solid #d32f2f",
-                                borderRadius: 6,
-                                padding: "4px 12px",
-                                cursor: "pointer"
-                              }}
-                              onClick={async () => {
-                                // --- 開始檢查 ---
-                                if (!sec.content) {
-                                  console.error("Cannot retry question generation: section content is empty.");
-                                  // 可以選擇更新錯誤訊息提示使用者先解決內容問題
-                                  const newSections = [...sections];
-                                  newSections[idx].error = {
-                                    type: "questions",
-                                    message: "無法重試：章節內容為空",
-                                    retrying: false
-                                  };
-                                  setSections(newSections);
-                                  return; // 不執行 API 呼叫
-                                }
-                                // --- 檢查結束 ---
+                              {/* 提示顯示區 */}
+                              {showHint[String(idx)] && (
+                                <div style={hintBoxStyle}>
+                                  <strong>提示：</strong>{hint[String(idx)] || question.hint || "正在加載提示..."}
+                                </div>
+                              )}
 
-                                const newSections = [...sections];
-                                newSections[idx].error = {
-                                  type: "questions",
-                                  message: sec.error?.message || "產生題目失敗",
-                                  retrying: true
-                                };
-                                setSections(newSections);
-                                try {
-                                  const requestBody = {
-                                    sectionTitle: sec.title,
-                                    sectionContent: sec.content,
-                                    ...(targetAudience && { targetAudience }),
-                                    selectedQuestionTypes: selectedQuestionTypes.join(","),
-                                    numQuestions
-                                  };
-                                  console.log(`[Section ${idx}] Retrying questions with body:`, JSON.stringify(requestBody, null, 2));
-                                  const data = await fetchWithRetry("/api/generate-questions", requestBody);
+                              {/* 答錯提示 */}
+                              {typeof submittedValue === 'string' && (
+                                <div style={feedbackIncorrectStyle}>
+                                  ❌ 答錯了，請參考提示或重新選擇。
+                                </div>
+                              )}
+                               {/* 答對提示 */}
+                              {isCorrectlySubmitted && (
+                                <div style={feedbackCorrectStyle}>
+                                  ✅ 恭喜答對了！
+                                  {currentQIdx === sec.questions.length - 1 && <span> (🎉 本章練習結束)</span>}
+                                </div>
+                              )}
 
-                                  newSections[idx].questions = Array.isArray(data.questions) ? data.questions : [];
-                                  newSections[idx].error = undefined;
-                                  setSections([...newSections]);
-                                } catch (err) {
-                                  console.error(`[Section ${idx}] Error retrying questions for "${sec.title}":`, err);
-                                  newSections[idx].error = {
-                                    type: "questions",
-                                    message: err instanceof Error ? err.message : "產生題目失敗",
-                                    retrying: false
-                                  };
-                                  setSections([...newSections]);
-                                }
-                              }}
-                              disabled={sec.error.retrying || !sec.content} // 如果內容為空也禁用重試
-                            >重試</button>
-                          )}
-                          {sec.error.retrying && <span style={{ marginLeft: 8 }}>重試中...</span>}
-                        </div>
-                      )}
-
-                      {/* 骨架屏: 只有在 loadingStep 是 'questions' 且 questions 尚未載入且沒有錯誤時顯示 */}
-                      {loadingStep === "questions" && (!sec.questions || sec.questions.length === 0) && !sec.error && <SkeletonBlock height={80} width="80%" style={{ marginTop: 12 }} />}
-                    </>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   )}
-                </>
+
+                    {/* 題目載入骨架屏 */}
+                    {loadingStep === "questions" && (!sec.questions || sec.questions.length === 0) && !sec.error && sec.content && (
+                      <div style={questionAreaStyle}>
+                         <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>
+                           <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
+                         </h4>
+                         <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                         </div>
+                      </div>
               )}
             </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
-      {/* AI 助教 */}
-      {sections.length > 0 && (
+
+      {/* AI 助教 (只有在產生內容後顯示) */}
+      {sections.length > 0 && !isGenerating && (
         <ChatAssistant
           allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')}
           targetAudience={targetAudience}
         />
       )}
-      {/* 將 style 標籤移到這裡 */}
+
+      {/* 全域樣式和動畫 */}
       <style jsx global>{`
-        @keyframes blinking-blank {
-          0% { opacity: 0.3; }
-          100% { opacity: 1; }
+        body {
+          margin: 0; /* 移除預設 body margin */
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* 使用系統字體 */
+        }
+        .skeleton-block {
+          background-color: #e5e7eb; /* 骨架屏基礎顏色 */
+          border-radius: 4px;
+          background-image: linear-gradient(90deg, #e5e7eb 0px, #f3f4f6 40px, #e5e7eb 80px);
+          background-size: 200% 100%;
+          animation: skeleton-loading 1.5s infinite linear;
         }
         @keyframes skeleton-loading {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
+
+        /* --- 將 progress 樣式移到這裡 --- */
+        progress::-webkit-progress-bar {
+          background-color: #e5e7eb;
+          border-radius: 4px;
+        }
+        progress::-webkit-progress-value {
+          background-color: #3b82f6; /* 藍色進度 */
+          border-radius: 4px;
+          transition: width 0.3s ease-in-out;
+        }
+        progress::-moz-progress-bar { /* Firefox */
+          background-color: #3b82f6;
+          border-radius: 4px;
+          transition: width 0.3s ease-in-out;
+        }
+        /* --- 結束 progress 樣式 --- */
+
+        /* 可以加入其他需要的全域樣式 */
       `}</style>
     </div>
   );
