@@ -272,7 +272,7 @@ export default function GenerateCourse() {
     setLoadingStep("outline");
     let outlineArr: string[] = [];
     try {
-      const data = await fetchWithRetry("/api/generate-outline", { prompt, numSections });
+      const data: { outline: string[] } = await fetchWithRetry("/api/generate-outline", { prompt, numSections, targetAudience });
       outlineArr = data.outline;
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
