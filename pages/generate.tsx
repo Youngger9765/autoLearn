@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm';
 
 // --- Helper Functions & Components (使用內聯樣式) ---
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchWithRetry(url: string, body: any, retries = 2, delay = 1000): Promise<any> {
   for (let i = 0; i <= retries; i++) {
     try {
@@ -407,7 +408,7 @@ export default function GenerateCourse() {
             sectionContent: sectionToRetry.content,
             ...(targetAudience && { targetAudience }),
             selectedQuestionTypes: typesString,
-            numQuestions
+          numQuestions
           };
           data = await fetchWithRetry(apiUrl, requestBody);
           sectionToRetry.questions = Array.isArray(data.questions) ? data.questions : [];
@@ -415,7 +416,7 @@ export default function GenerateCourse() {
           break;
       }
       setSections([...currentSections]); // 更新成功狀態
-    } catch (err) {
+      } catch (err) {
       console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, err);
       sectionToRetry.error = {
         type: type,
@@ -1194,8 +1195,8 @@ export default function GenerateCourse() {
                   {sec.questions && sec.questions.length > 0 && (
                       <div style={questionAreaStyle}>
                         {renderQuestions(sec, idx)}
-                      </div>
-                  )}
+                              </div>
+                            )}
 
                     {/* 題目載入骨架屏 */}
                     {loadingStep === "questions" && (!sec.questions || sec.questions.length === 0) && !sec.error && sec.content && (
@@ -1208,12 +1209,12 @@ export default function GenerateCourse() {
                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                         </div>
-                      </div>
+                          </div>
+                    </div>
+                  )}
+            </div>
               )}
             </div>
-                )}
-              </div>
             );
           })}
         </div>
