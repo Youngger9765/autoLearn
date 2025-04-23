@@ -274,6 +274,7 @@ export default function GenerateCourse() {
     setLoadingStep("outline");
     let outlineArr: string[] = [];
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: { outline: string[] } = await fetchWithRetry("/api/generate-outline", { prompt, numSections, targetAudience });
       outlineArr = data.outline;
     } catch (err) {
@@ -738,6 +739,12 @@ export default function GenerateCourse() {
     const submittedValue = submitted[String(secIndex)];
     const isCorrectlySubmitted = submittedValue === true;
 
+    if (!question) {
+      return <p>無法載入題目。</p>;
+    }
+
+    const optionsToShow = question.options || [];
+
     return (
       <div style={questionAreaStyle}>
         <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>隨堂練習</h4>
@@ -751,7 +758,6 @@ export default function GenerateCourse() {
           }
 
           const isTF = question.options && question.options.length === 2 && question.options.every((opt: string) => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
-          const optionsToShow = isTF ? ['是', '否'] : question.options || [];
           const currentSelected = selectedOption[String(secIndex)];
           const isCorrectAnswer = isTF
             ? (currentSelected === '是' && ['是', 'True', '對'].includes(question.answer)) || (currentSelected === '否' && ['否', 'False', '錯'].includes(question.answer))
