@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const { allContent, question, threadId } = req.body;
+  const { allContent, question, threadId, targetAudience } = req.body;
 
   if (!allContent || !question) {
     res.status(400).json({ error: "缺少課程內容或提問" });
@@ -43,11 +43,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 2. 執行 assistant
     let run;
+    let audienceInstruction = "";
+    if (targetAudience && targetAudience !== "other" && !isNaN(Number(targetAudience))) {
+      audienceInstruction = `\n請注意，學生的背景是「${targetAudience} 年級」，請用適合他們的語氣和深度回答。`;
+    } else if (targetAudience === "other") {
+      audienceInstruction = `\n請注意，學生的背景是「一般使用者」，請用適合他們的語氣和深度回答。`;
+    }
     if (!threadId) {
       // 第一次提問，傳 instructions
       run = await openai.beta.threads.runs.create(thread_id, {
         assistant_id: ASSISTANT_ID,
-        instructions: `以下是本次課程的所有內容，請根據這些內容回答學生問題，若內容不足請誠實說明：\n${allContent}`,
+        instructions: `以下是本次課程的所有內容，請根據這些內容回答學生問題，若內容不足請誠實說明：\n${allContent}${audienceInstruction}`,
       });
     } else {
       // 之後提問，不傳 instructions

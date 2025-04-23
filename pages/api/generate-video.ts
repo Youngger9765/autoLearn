@@ -4,10 +4,16 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "只支援 POST" });
-  const { sectionTitle, sectionContent } = req.body;
-  if (!sectionTitle && !sectionContent) return res.status(400).json({ error: "缺少參數" });
+  const { sectionTitle, sectionContent, targetAudience } = req.body;
+  if (!sectionTitle && !sectionContent) return res.status(400).json({ error: "缺少標題或內容參數" });
 
-  const sys_prompt = `請根據章節「${sectionTitle}」${
+  let audienceText = "";
+  if (targetAudience && targetAudience !== "other" && !isNaN(Number(targetAudience))) {
+    audienceText = `，目標對象是「${targetAudience} 年級」`;
+  } else if (targetAudience === "other") {
+    audienceText = `，目標對象是「一般使用者」`;
+  }
+  const sys_prompt = `請根據章節「${sectionTitle}」${audienceText}${
     sectionContent ? `內容：「${sectionContent}」` : ""
   }，推薦一個最適合的 YouTube 影片，**只回傳影片網址，不要多餘說明**。`;
 
