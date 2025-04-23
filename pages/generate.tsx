@@ -2,7 +2,7 @@ import { useState, Fragment, CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
-import { type Question, type Section } from '../types/course'; // 確保類型定義路徑正確
+import { type Question, type Section } from '@/types/course'; // 假設使用路徑別名 @/types
 import remarkGfm from 'remark-gfm';
 
 // --- Helper Functions & Components (使用內聯樣式) ---
@@ -161,20 +161,19 @@ function ChatAssistant({ allContent, targetAudience }: { allContent: string, tar
                     remarkPlugins={[remarkGfm]}
                     components={{
                       p: ({node, ...props}) => <p style={{ marginBottom: '0.25rem' }} {...props} />,
-                      code: ({ node, inline, className, children, ...props }) => {
+                      code: ({ node, className, children, ...props }) => {
                         const match = /language-(\w+)/.exec(className || '');
-                        return !inline && match ? (
+                        return match ? (
                           <SyntaxHighlighter
-                            style={atomDark} // 可以保持使用高亮樣式
+                            style={atomDark}
                             language={match[1]}
                             PreTag="div"
-                            customStyle={{ fontSize: '0.8rem', borderRadius: '0.25rem', margin: '0.25rem 0' }} // 調整代碼塊樣式
                             {...props}
                           >
                             {String(children).replace(/\n$/, '')}
                           </SyntaxHighlighter>
                         ) : (
-                          <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontSize: '0.8rem' }} {...props}>
+                          <code className={className} {...props} style={{ backgroundColor: '#f3f4f6', padding: '0.2em 0.4em', borderRadius: '3px', fontSize: '85%' }}>
                             {children}
                           </code>
                         );
@@ -573,39 +572,44 @@ export default function GenerateCourse() {
     marginBottom: '1rem',
   };
 
+  // 選項標籤基礎樣式 - 使用獨立邊框屬性
   const optionLabelBaseStyle: CSSProperties = {
-    display: 'block',
-    marginBottom: '0.75rem',
-    borderRadius: '6px',
+    display: 'block', // display: block 在 column 方向下仍然有效
     padding: '0.75rem 1rem',
-    border: '1px solid #d1d5db',
+    borderRadius: '0.375rem',
     cursor: 'pointer',
     transition: 'background-color 0.2s, border-color 0.2s',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#ffffff',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d1d5db',
+    color: '#374151',
   };
 
-  const optionLabelHoverStyle: CSSProperties = { // 僅用於未提交狀態
-     backgroundColor: '#f0f0f0',
+  // 選項標籤 Hover 樣式 - 只修改需要的獨立屬性
+  const optionLabelHoverStyle: CSSProperties = {
+    backgroundColor: '#f9fafb', // 淡灰色背景
+    borderColor: '#9ca3af', // 邊框變深
   };
 
-  const optionLabelSelectedStyle: CSSProperties = { // 選中但未提交
-    borderColor: '#60a5fa', // 藍色邊框
+  // 選項標籤選中樣式 - 只修改需要的獨立屬性
+  const optionLabelSelectedStyle: CSSProperties = {
     backgroundColor: '#eff6ff', // 淡藍色背景
+    borderColor: '#60a5fa', // 藍色邊框
   };
 
+  // 選項標籤答對樣式 - 只修改需要的獨立屬性
   const optionLabelCorrectStyle: CSSProperties = {
-    borderColor: '#34d399', // 綠色邊框
     backgroundColor: '#f0fdf4', // 淡綠色背景
-    color: '#059669', // 深綠色文字
-    fontWeight: 600,
-    cursor: 'default',
+    borderColor: '#4ade80', // 綠色邊框
+    color: '#15803d', // 深綠色文字
   };
 
+  // 選項標籤答錯樣式 - 只修改需要的獨立屬性
   const optionLabelIncorrectStyle: CSSProperties = {
-    borderColor: '#f87171', // 紅色邊框
     backgroundColor: '#fef2f2', // 淡紅色背景
-    color: '#dc2626', // 深紅色文字
-    cursor: 'default',
+    borderColor: '#f87171', // 紅色邊框
+    color: '#b91c1c', // 深紅色文字
   };
 
   const actionButtonStyle: CSSProperties = {
@@ -723,6 +727,165 @@ export default function GenerateCourse() {
   // --- 計算進度百分比 (修正) ---
   const currentProgressValue = totalSteps > 0 ? Math.round((progress / totalSteps) * 100) : 0;
   // --- 結束修正 ---
+
+  // --- 處理題目顯示和互動的邏輯 ---
+  const renderQuestions = (sec: Section, secIndex: number) => {
+    const currentQIdx = currentQuestionIdx[String(secIndex)] ?? 0;
+    const question = sec.questions?.[currentQIdx];
+    const submittedValue = submitted[String(secIndex)];
+    const isCorrectlySubmitted = submittedValue === true;
+
+    return (
+      <div style={questionAreaStyle}>
+        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>隨堂練習</h4>
+        {(() => {
+          if (!question) {
+            if (currentQIdx >= sec.questions.length) {
+              return <div style={feedbackCorrectStyle}>🎉 本章練習已完成！</div>;
+            }
+            console.error(`Question at index ${currentQIdx} not found for section ${secIndex}`, sec.questions);
+            return <div style={feedbackIncorrectStyle}>錯誤：無法載入題目 {currentQIdx + 1}</div>;
+          }
+
+          const isTF = question.options && question.options.length === 2 && question.options.every((opt: string) => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
+          const optionsToShow = isTF ? ['是', '否'] : question.options || [];
+          const currentSelected = selectedOption[String(secIndex)];
+          const isCorrectAnswer = isTF
+            ? (currentSelected === '是' && ['是', 'True', '對'].includes(question.answer)) || (currentSelected === '否' && ['否', 'False', '錯'].includes(question.answer))
+            : currentSelected === question.answer;
+
+          return (
+            <div>
+              <div style={{ marginBottom: '1rem', fontWeight: 500, color: '#1f2937' }}>
+                 <ReactMarkdown
+                   remarkPlugins={[remarkGfm]}
+                   unwrapDisallowed={true}
+                 >
+                   {`${currentQIdx + 1}. ${question.question_text}`}
+                 </ReactMarkdown>
+              </div>
+
+              {/* 選項 - 使用 Flexbox 佈局，強制每個選項換行 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}> {/* 修改 flexDirection 為 column */}
+                {optionsToShow.map((opt: string, i: number) => {
+                  const isSelected = currentSelected === opt;
+                  // 檢查提交時選擇的選項是否是當前選項，並且是否錯誤
+                  const showFailure = submittedValue === opt && !isCorrectlySubmitted;
+                  // 檢查提交時選擇的選項是否是當前選項，並且是否正確
+                  const showSuccess = submittedValue === opt && isCorrectlySubmitted;
+
+                  // 合併樣式
+                  let currentStyle = { ...optionLabelBaseStyle /*, marginBottom: 0 */ }; // 可選：移除 marginBottom
+                  if (isSelected) currentStyle = { ...currentStyle, ...optionLabelSelectedStyle };
+                  // 提交後的樣式優先級更高
+                  if (showSuccess) currentStyle = { ...currentStyle, ...optionLabelCorrectStyle };
+                  if (showFailure) currentStyle = { ...currentStyle, ...optionLabelIncorrectStyle };
+
+                  return (
+                    <label
+                      key={i}
+                      style={currentStyle} // 每個 label 是一個 flex item，現在會垂直排列
+                      onMouseOver={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelHoverStyle.backgroundColor ?? ''; }}
+                      onMouseOut={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelBaseStyle.backgroundColor ?? ''; }}
+                    >
+                      <input
+                        type="radio"
+                        name={`question-${secIndex}-${currentQIdx}`} // 確保 name 唯一
+                        value={opt}
+                        checked={isSelected}
+                        onChange={() => {
+                          if (isCorrectlySubmitted) return;
+
+                          if (typeof submitted[String(secIndex)] === 'string') {
+                            setSubmitted(s => {
+                              const newState = { ...s };
+                              delete newState[String(secIndex)];
+                              return newState;
+                            });
+                          }
+                          setSelectedOption(s => ({ ...s, [String(secIndex)]: opt }));
+                        }}
+                        disabled={isCorrectlySubmitted}
+                        style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} // 垂直居中
+                      />
+                      <span style={{ verticalAlign: 'middle' }}>{opt}</span> {/* 文字也垂直居中 */}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
+                <button
+                  onClick={() => {
+                    if (!currentSelected) return;
+                    if (isCorrectAnswer) {
+                      setSubmitted(s => ({ ...s, [String(secIndex)]: true }));
+                    } else {
+                      setSubmitted(s => ({ ...s, [String(secIndex)]: currentSelected }));
+                    }
+                  }}
+                  disabled={!currentSelected || isCorrectlySubmitted}
+                  style={(!currentSelected || isCorrectlySubmitted) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
+                >
+                  提交答案
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowHint(h => ({ ...h, [String(secIndex)]: true }));
+                    if (!hint[String(secIndex)] && !question.hint) {
+                      try {
+                        const res = await fetch("/api/generate-hint", { /* ... body ... */ });
+                        const data = await res.json();
+                        setHint(h => ({ ...h, [String(secIndex)]: data.hint ?? "暫無提示" }));
+                      } catch (err) { setHint(h => ({ ...h, [String(secIndex)]: "獲取提示失敗" })); }
+                    }
+                  }}
+                  style={(showHint[String(secIndex)] || isCorrectlySubmitted) ? { ...hintButtonStyle, ...disabledActionButtonStyle } : hintButtonStyle}
+                  disabled={showHint[String(secIndex)] || isCorrectlySubmitted}
+                >
+                  {showHint[String(secIndex)] ? "提示已顯示" : "需要提示"}
+                </button>
+
+                {isCorrectlySubmitted && currentQIdx < sec.questions.length - 1 && (
+                  <button
+                    onClick={() => {
+                      setCurrentQuestionIdx(c => ({ ...c, [String(secIndex)]: currentQIdx + 1 }));
+                      setSelectedOption(s => ({ ...s, [String(secIndex)]: null }));
+                      setSubmitted(s => { const newS = { ...s }; delete newS[String(secIndex)]; return newS; });
+                      setShowHint(h => ({ ...h, [String(secIndex)]: false }));
+                      setHint(h => ({ ...h, [String(secIndex)]: null }));
+                    }}
+                    style={nextButtonStyle}
+                  >
+                    下一題 →
+                  </button>
+                )}
+              </div>
+
+              {showHint[String(secIndex)] && (
+                <div style={hintBoxStyle}>
+                  <strong>提示：</strong>{hint[String(secIndex)] || question.hint || "正在加載提示..."}
+                </div>
+              )}
+
+              {typeof submittedValue === 'string' && (
+                <div style={feedbackIncorrectStyle}>
+                  ❌ 答錯了，請參考提示或重新選擇。
+                </div>
+              )}
+              
+              {isCorrectlySubmitted && (
+                <div style={feedbackCorrectStyle}>
+                  ✅ 恭喜答對了！
+                  {currentQIdx === sec.questions.length - 1 && <span> (🎉 本章練習結束)</span>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 
   return (
     <div style={containerStyle}>
@@ -1028,161 +1191,8 @@ export default function GenerateCourse() {
                     {/* 練習題區 */}
                   {sec.questions && sec.questions.length > 0 && (
                       <div style={questionAreaStyle}>
-                        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>隨堂練習</h4>
-                      {(() => {
-                          if (!question) {
-                            if (currentQIdx >= sec.questions.length) {
-                              return <div style={feedbackCorrectStyle}>🎉 本章練習已完成！</div>;
-                            }
-                            console.error(`Question at index ${currentQIdx} not found for section ${idx}`, sec.questions);
-                            return <div style={feedbackIncorrectStyle}>錯誤：無法載入題目 {currentQIdx + 1}</div>;
-                          }
-
-                          const isTF = question.options && question.options.length === 2 && question.options.every(opt => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
-                          const optionsToShow = isTF ? ['是', '否'] : question.options || [];
-                          const currentSelected = selectedOption[String(idx)];
-                          const isCorrectAnswer = isTF
-                              ? (currentSelected === '是' && ['是', 'True', '對'].includes(question.answer)) || (currentSelected === '否' && ['否', 'False', '錯'].includes(question.answer))
-                              : currentSelected === question.answer;
-
-                        return (
-                          <div>
-                              <p style={questionTextStyle}>
-                                <ReactMarkdown components={{ p: 'span' }}>
-                                  {`${currentQIdx + 1}. ${question.question_text}`}
-                                </ReactMarkdown>
-                              </p>
-
-                              <div style={{ marginBottom: '1rem' }}>
-                                {optionsToShow.map((opt, i) => {
-                                  const isSelected = currentSelected === opt;
-                                  const hasTriedIncorrectly = typeof submittedValue === 'string' && submittedValue === opt;
-                                  const showSuccess = isCorrectlySubmitted && isSelected; // 答對且選中
-                                  const showError = hasTriedIncorrectly; // 嘗試過這個錯誤選項
-
-                                  let currentStyle = { ...optionLabelBaseStyle };
-                                  if (isSelected && !submittedValue) currentStyle = { ...currentStyle, ...optionLabelSelectedStyle };
-                                  if (showSuccess) currentStyle = { ...currentStyle, ...optionLabelCorrectStyle };
-                                  if (showError) currentStyle = { ...currentStyle, ...optionLabelIncorrectStyle };
-                                  // 答對後，標示正確答案（即使未選中）
-                                  if (isCorrectlySubmitted && !isSelected && (isTF ? (opt === '是' && ['是', 'True', '對'].includes(question.answer)) || (opt === '否' && ['否', 'False', '錯'].includes(question.answer)) : opt === question.answer)) {
-                                      currentStyle = { ...currentStyle, ...optionLabelCorrectStyle, opacity: 0.7 }; // 稍微調暗非選中的正確答案
-                                  }
-
-                              return (
-                                <label
-                                  key={i}
-                                      style={currentStyle}
-                                      onMouseOver={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelHoverStyle.backgroundColor; }}
-                                      onMouseOut={(e) => { if (!submittedValue && !isSelected) (e.currentTarget as HTMLLabelElement).style.backgroundColor = optionLabelBaseStyle.backgroundColor; }}
-                                >
-                                  <input
-                                    type="radio"
-                                        name={`q${idx}_${currentQIdx}`}
-                                    value={opt}
-                                        checked={isSelected}
-                                        onChange={() => {
-                                          if (isCorrectlySubmitted) return; // 如果已答對，不允許更改
-
-                                          // 如果之前提交過錯誤答案 (submittedValue 是 string)，則重置 submitted 狀態
-                                          if (typeof submitted[String(idx)] === 'string') {
-                                            setSubmitted(s => {
-                                              const newState = { ...s };
-                                              delete newState[String(idx)]; // 重置為 undefined
-                                              return newState;
-                                            });
-                                          }
-                                          // 更新選擇的選項
-                                          setSelectedOption(s => ({ ...s, [String(idx)]: opt }));
-                                        }}
-                                        disabled={isCorrectlySubmitted}
-                                        style={{ marginRight: '0.75rem', verticalAlign: 'middle', width: '1rem', height: '1rem', accentColor: '#2563eb' }}
-                                      />
-                                      <span style={{ verticalAlign: 'middle' }}>
-                                    <ReactMarkdown components={{ p: 'span' }}>{opt}</ReactMarkdown>
-                                  </span>
-                                      {showSuccess && <span style={{ marginLeft: '0.5rem' }}>✅</span>}
-                                      {showError && <span style={{ marginLeft: '0.5rem' }}>❌</span>}
-                                </label>
-                              );
-                            })}
-                              </div>
-
-                              {/* 操作按鈕區 */}
-                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
-                            <button
-                              onClick={() => {
-                                    if (!currentSelected) return;
-                                    if (isCorrectAnswer) {
-                                  setSubmitted(s => ({ ...s, [String(idx)]: true }));
-                                } else {
-                                      setSubmitted(s => ({ ...s, [String(idx)]: currentSelected }));
-                                    }
-                                  }}
-                                  disabled={!currentSelected || isCorrectlySubmitted} // 移除 typeof submittedValue === 'string'
-                                  style={(!currentSelected || isCorrectlySubmitted) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
-                                >
-                                  提交答案
-                                </button>
-                            <button
-                              onClick={async () => {
-                                setShowHint(h => ({ ...h, [String(idx)]: true }));
-                                    if (!hint[String(idx)] && !question.hint) {
-                                      try {
-                                        const res = await fetch("/api/generate-hint", { /* ... body ... */ });
-                                  const data = await res.json();
-                                        setHint(h => ({ ...h, [String(idx)]: data.hint ?? "暫無提示" }));
-                                      } catch (err) { setHint(h => ({ ...h, [String(idx)]: "獲取提示失敗" })); }
-                                    }
-                                  }}
-                                  style={(showHint[String(idx)] || isCorrectlySubmitted) ? { ...hintButtonStyle, ...disabledActionButtonStyle } : hintButtonStyle}
-                                  disabled={showHint[String(idx)] || isCorrectlySubmitted}
-                                >
-                                  {showHint[String(idx)] ? "提示已顯示" : "需要提示"}
-                                </button>
-
-                                {/* 下一題按鈕 (答對時顯示) */}
-                                {isCorrectlySubmitted && currentQIdx < sec.questions.length - 1 && (
-                              <button
-                                    onClick={() => {
-                                      setCurrentQuestionIdx(c => ({ ...c, [String(idx)]: currentQIdx + 1 }));
-                                  setSelectedOption(s => ({ ...s, [String(idx)]: null }));
-                                      setSubmitted(s => { const newS = { ...s }; delete newS[String(idx)]; return newS; });
-                                  setShowHint(h => ({ ...h, [String(idx)]: false }));
-                                  setHint(h => ({ ...h, [String(idx)]: null }));
-                                }}
-                                    style={nextButtonStyle}
-                                  >
-                                    下一題 →
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* 提示顯示區 */}
-                              {showHint[String(idx)] && (
-                                <div style={hintBoxStyle}>
-                                  <strong>提示：</strong>{hint[String(idx)] || question.hint || "正在加載提示..."}
-                                </div>
-                              )}
-
-                              {/* 答錯提示 */}
-                              {typeof submittedValue === 'string' && (
-                                <div style={feedbackIncorrectStyle}>
-                                  ❌ 答錯了，請參考提示或重新選擇。
-                                </div>
-                              )}
-                               {/* 答對提示 */}
-                              {isCorrectlySubmitted && (
-                                <div style={feedbackCorrectStyle}>
-                                  ✅ 恭喜答對了！
-                                  {currentQIdx === sec.questions.length - 1 && <span> (🎉 本章練習結束)</span>}
-                                </div>
-                              )}
-
-                          </div>
-                        );
-                      })()}
-                    </div>
+                        {renderQuestions(sec, idx)}
+                      </div>
                   )}
 
                     {/* 題目載入骨架屏 */}
