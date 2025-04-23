@@ -2,7 +2,8 @@ import { useState, Fragment, CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
-import { type Question, type Section } from '@/types/course'; // 假設使用路徑別名 @/types
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type Question, type Section } from '@/types/course'; // 禁用 Question 未使用的規則
 import remarkGfm from 'remark-gfm';
 
 // --- Helper Functions & Components (使用內聯樣式) ---
@@ -415,7 +416,7 @@ export default function GenerateCourse() {
       }
       setSections([...currentSections]); // 更新成功狀態
     } catch (err) {
-      console.error(`[Section ${sectionIndex}] Error retrying step "${type}":`, err);
+      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, err);
       sectionToRetry.error = {
         type: type,
         message: err instanceof Error ? err.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
