@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 // import supabase from '../../lib/supabase'; // 之前的嘗試
-import supabase from '../lib/supabase'; // 嘗試假設 lib 在 pages 資料夾內
+import supabase from '@/lib/supabase'; // 使用路徑別名
 import { v4 as uuidv4 } from 'uuid'; // 引入 UUID
 
 // 定義前端傳來的資料結構 (根據之前的 API 和前端 state 推斷)
