@@ -68,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let questions;
     try {
       questions = JSON.parse(content);
-    } catch (parseError) {
+    } catch (_parseError) {
       console.error("Failed to parse OpenAI response:", content);
       throw new Error("無法解析 AI 回傳的 JSON 格式");
     }

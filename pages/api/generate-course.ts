@@ -1,89 +1,108 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { OpenAI } from "openai";
+import supabase from '@/lib/supabase'; // 引入 Supabase client
+import { v4 as uuidv4 } from 'uuid'; // 引入 UUID
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// 定義前端傳來的資料結構 (根據之前的 API 和前端 state 推斷)
+interface QuestionData {
+  question_text: string;
+  options: string[];
+  answer: string; // 注意：使用 answer 而非 correct_answer，以匹配 generate-questions API 的回傳
+  hint?: string;
+}
+
+interface SectionData {
+  title: string;
+  content: string;
+  videoUrl?: string; // 前端 state 使用 videoUrl
+  questions: QuestionData[];
+}
+
+interface CourseDataPayload {
+  courseTitle: string; // 假設前端傳來 courseTitle
+  prompt: string; // 原始的課程主題 prompt
+  sections: SectionData[];
+  userId?: string; // 可選的使用者 ID
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
-    res.status(405).json({ error: "只支援 POST 請求" });
-    return;
+    return res.status(405).json({ error: "只支援 POST" });
   }
 
-  const { prompt } = req.body;
+  const { courseTitle, prompt, sections, userId }: CourseDataPayload = req.body;
 
-  if (!prompt) {
-    res.status(400).json({ error: "缺少 prompt 參數" });
-    return;
+  // 基本驗證
+  if (!courseTitle || !prompt || !Array.isArray(sections) || sections.length === 0) {
+    return res.status(400).json({ error: "缺少必要的課程資料：courseTitle, prompt 或 sections" });
   }
-
-  const sys_prompt = `你是一位課程設計師，根據使用者輸入的主題，幫我產生課程，請用以下 JSON 格式回傳（key 請用英文）：
-
-{
-  "title": "課程標題",
-  "sections": [
-    {
-      "id": 章節編號,
-      "title": "章節標題",
-      "content": "講義內容",
-      "youtube_url": "推薦影片 YouTube URL",
-      "questions": [
-        {
-          "question_text": "題目",
-          "options": ["選項1", "選項2", ...]
-        }
-      ]
-    }
-  ]
-}
-
-課程需包含：
-1. 課程標題
-2. 5~7 個章節，每章包含標題、講義內容、推薦影片 YouTube URL
-3. 每章 1~2 題選擇題，題幹與選項要清楚
-`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      messages: [
-        { role: "system", content: sys_prompt },
-        { role: "user", content: prompt }
-      ],
-      model: "gpt-4.1"
+    const courseId = uuidv4(); // 產生課程 ID
+
+    // 1. 寫入 courses 表
+    const { error: courseError } = await supabase.from('courses').insert({
+      id: courseId,
+      title: courseTitle,
+      prompt: prompt,
+      user_id: userId || null // 如果有 userId 就寫入，否則為 null
     });
 
-    const content = completion.choices[0].message.content;
-    console.log("GPT 回傳內容：", content);
-
-    let data;
-    try {
-      data = JSON.parse(content!);
-    } catch {
-      return res.status(500).json({ error: "AI 回傳格式錯誤，請重試" });
+    if (courseError) {
+      console.error("Supabase insert course error:", courseError);
+      throw new Error(`寫入 courses 表失敗: ${courseError.message}`);
     }
 
-    if (data["課程標題"] && data["章節"]) {
-      data = {
-        title: data["課程標題"],
-        sections: (data["章節"] || []).map((sec: Record<string, unknown>, idx: number) => ({
-          id: idx,
-          title: sec["標題"] as string,
-          content: sec["講義內容"] as string,
-          youtube_url: sec["推薦影片"] as string,
-          questions: (sec["選擇題"] as Array<Record<string, unknown>> || []).map((q) => ({
-            question_text: q["題目"] as string,
-            options: q["選項"] as string[]
-          }))
-        }))
-      };
+    // 2. 遍歷 sections 並寫入 sections 和 questions 表
+    for (let i = 0; i < sections.length; i++) {
+      const sec = sections[i];
+      const sectionId = uuidv4(); // 產生章節 ID
+
+      // 寫入 sections 表
+      const { error: sectionError } = await supabase.from('sections').insert({
+        id: sectionId,
+        course_id: courseId,
+        title: sec.title,
+        content: sec.content,
+        youtube_url: sec.videoUrl || null, // 使用 videoUrl，如果沒有則為 null
+        order_no: i // 章節順序
+      });
+
+      if (sectionError) {
+        console.error(`Supabase insert section (order ${i}) error:`, sectionError);
+        // 注意：這裡可以選擇是否要 rollback 或繼續，取決於業務邏輯
+        // 為了簡單起見，我們先拋出錯誤停止流程
+        throw new Error(`寫入 sections 表 (章節 ${i + 1}) 失敗: ${sectionError.message}`);
+      }
+
+      // 寫入 questions 表 (如果該章節有題目)
+      if (sec.questions && Array.isArray(sec.questions) && sec.questions.length > 0) {
+        const questionInserts = sec.questions.map(q => ({
+          // question ID 由資料庫自動產生 (假設有設定 auto-increment 或 UUID default)
+          // 或者也可以在這裡用 uuidv4() 產生
+          section_id: sectionId,
+          question_text: q.question_text,
+          options: q.options,
+          // 使用 q.answer 而非 q.correct_answer
+          correct_answer: q.answer, // 將前端的 answer 對應到資料庫的 correct_answer 欄位
+          hint: q.hint || null // 如果有 hint 就寫入
+        }));
+
+        const { error: questionError } = await supabase.from('questions').insert(questionInserts);
+
+        if (questionError) {
+          console.error(`Supabase insert questions for section (order ${i}) error:`, questionError);
+          throw new Error(`寫入 questions 表 (章節 ${i + 1}) 失敗: ${questionError.message}`);
+        }
+      }
     }
 
-    res.status(200).json(data);
+    // 所有資料寫入成功，回傳 courseId
+    res.status(200).json({ success: true, course_id: courseId });
+
   } catch (error) {
-    console.error("API 產生課程錯誤：", error);
-    if (error instanceof Error) {
-      res.status(500).json({ error: error.message || "產生課程時發生錯誤" });
-    } else {
-      res.status(500).json({ error: "產生課程時發生錯誤" });
-    }
+    console.error("Error in /api/generate-course:", error);
+    const message = error instanceof Error ? error.message : "儲存課程時發生未知錯誤";
+    // 回傳 500 Internal Server Error
+    res.status(500).json({ error: message });
   }
 } 
