@@ -2,14 +2,30 @@ import { useState, Fragment, CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type Question, type Section } from '@/types/course'; // 禁用 Question 未使用的規則
 import remarkGfm from 'remark-gfm';
+
+// 臨時型別定義（請根據實際情況調整）
+type Question = {
+  question_text: string;
+  options: string[];
+  answer: string;
+  hint?: string;
+};
+type Section = {
+  title: string;
+  content: string;
+  questions: Question[];
+  videoUrl: string;
+  error?: {
+    type: string;
+    message: string;
+    retrying: boolean;
+  };
+};
 
 // --- Helper Functions & Components (使用內聯樣式) ---
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchWithRetry(url: string, body: any, retries = 2, delay = 1000): Promise<any> {
+async function fetchWithRetry(url: string, body: unknown, retries = 2, delay = 1000): Promise<unknown> {
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, {
@@ -274,8 +290,7 @@ export default function GenerateCourse() {
     setLoadingStep("outline");
     let outlineArr: string[] = [];
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: { outline: string[] } = await fetchWithRetry("/api/generate-outline", { prompt, numSections, targetAudience });
+      const data = await fetchWithRetry("/api/generate-outline", { prompt, numSections, targetAudience }) as { outline: string[] };
       outlineArr = data.outline;
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
@@ -312,24 +327,24 @@ export default function GenerateCourse() {
         }
 
         try {
-          let requestBody: any = {};
+          let requestBody = {};
           let apiUrl = "";
-          let data: any;
+          let data: unknown;
 
           switch (step) {
             case "sections":
               apiUrl = "/api/generate-section";
               requestBody = { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience };
               data = await fetchWithRetry(apiUrl, requestBody);
-              sectionArr[i].content = data.content;
+              sectionArr[i].content = (data as { content: string }).content;
               sectionArr[i].error = undefined;
               break;
             case "videos":
               apiUrl = "/api/generate-video";
               requestBody = { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience };
               data = await fetchWithRetry(apiUrl, requestBody);
-        sectionArr[i].videoUrl = data.videoUrl;
-        sectionArr[i].error = undefined;
+              sectionArr[i].videoUrl = (data as { videoUrl: string }).videoUrl;
+              sectionArr[i].error = undefined;
               break;
             case "questions":
               apiUrl = "/api/generate-questions";
@@ -342,8 +357,10 @@ export default function GenerateCourse() {
           numQuestions
               };
               data = await fetchWithRetry(apiUrl, requestBody);
-              sectionArr[i].questions = Array.isArray(data.questions) ? data.questions : [];
-        sectionArr[i].error = undefined;
+              sectionArr[i].questions = Array.isArray((data as { questions: unknown[] }).questions)
+                ? (data as { questions: Question[] }).questions
+                : [];
+              sectionArr[i].error = undefined;
               break;
           }
       } catch (err) {
@@ -376,28 +393,24 @@ export default function GenerateCourse() {
     }
 
     try {
-      let requestBody: any = {};
+      let requestBody = {};
       let apiUrl = "";
-      let data: any;
+      let data: unknown;
 
       switch (type) {
         case "section":
           apiUrl = "/api/generate-section";
           requestBody = { sectionTitle: sectionToRetry.title, courseTitle: prompt, targetAudience };
           data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.content = data.content;
+          sectionToRetry.content = (data as { content: string }).content;
           sectionToRetry.error = undefined; // 清除錯誤
-          // 內容成功後，可能需要重置後續步驟的錯誤（如果有的話）
-          if (sectionToRetry.error?.type === 'video' || sectionToRetry.error?.type === 'questions') {
-              sectionToRetry.error = undefined;
-          }
           break;
         case "video":
           if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空");
           apiUrl = "/api/generate-video";
           requestBody = { sectionTitle: sectionToRetry.title, sectionContent: sectionToRetry.content, targetAudience };
           data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.videoUrl = data.videoUrl;
+          sectionToRetry.videoUrl = (data as { videoUrl: string }).videoUrl;
           sectionToRetry.error = undefined;
           break;
         case "questions":
@@ -412,16 +425,18 @@ export default function GenerateCourse() {
           numQuestions
           };
           data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.questions = Array.isArray(data.questions) ? data.questions : [];
+          sectionToRetry.questions = Array.isArray((data as { questions: unknown[] }).questions)
+            ? (data as { questions: Question[] }).questions
+            : [];
           sectionToRetry.error = undefined;
           break;
       }
       setSections([...currentSections]); // 更新成功狀態
-      } catch (error) {
-      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, error);
+      } catch (err) {
+      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, err);
       sectionToRetry.error = {
         type: type,
-        message: error instanceof Error ? error.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
+        message: err instanceof Error ? err.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
         retrying: false // 重試失敗，設置為 false
       };
       setSections([...currentSections]); // 更新失敗狀態
@@ -731,7 +746,6 @@ export default function GenerateCourse() {
     const currentQIdx = currentQuestionIdx[String(secIndex)] ?? 0;
     const question = sec.questions?.[currentQIdx];
     const submittedValue = submitted[String(secIndex)];
-    const isCorrectlySubmitted = submittedValue === true;
 
     if (!question) {
       return <p>無法載入題目。</p>;
@@ -773,9 +787,9 @@ export default function GenerateCourse() {
                 {optionsToShow.map((opt: string, i: number) => {
                   const isSelected = currentSelected === opt;
                   // 檢查提交時選擇的選項是否是當前選項，並且是否錯誤
-                  const showFailure = submittedValue === opt && !isCorrectlySubmitted;
+                  const showFailure = submittedValue === opt && !isCorrectAnswer;
                   // 檢查提交時選擇的選項是否是當前選項，並且是否正確
-                  const showSuccess = submittedValue === opt && isCorrectlySubmitted;
+                  const showSuccess = submittedValue === opt && isCorrectAnswer;
 
                   // 合併樣式
                   let currentStyle = { ...optionLabelBaseStyle /*, marginBottom: 0 */ }; // 可選：移除 marginBottom
@@ -797,7 +811,7 @@ export default function GenerateCourse() {
                         value={opt}
                         checked={isSelected}
                         onChange={() => {
-                          if (isCorrectlySubmitted) return;
+                          if (isCorrectAnswer) return;
 
                           if (typeof submitted[String(secIndex)] === 'string') {
                             setSubmitted(s => {
@@ -808,7 +822,7 @@ export default function GenerateCourse() {
                           }
                           setSelectedOption(s => ({ ...s, [String(secIndex)]: opt }));
                         }}
-                        disabled={isCorrectlySubmitted}
+                        disabled={isCorrectAnswer}
                         style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} // 垂直居中
                       />
                       <span style={{ verticalAlign: 'middle' }}>{opt}</span> {/* 文字也垂直居中 */}
@@ -827,8 +841,8 @@ export default function GenerateCourse() {
                       setSubmitted(s => ({ ...s, [String(secIndex)]: currentSelected }));
                     }
                   }}
-                  disabled={!currentSelected || isCorrectlySubmitted}
-                  style={(!currentSelected || isCorrectlySubmitted) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
+                  disabled={!currentSelected || isCorrectAnswer}
+                  style={(!currentSelected || isCorrectAnswer) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
                 >
                   提交答案
                 </button>
@@ -840,16 +854,18 @@ export default function GenerateCourse() {
                         const res = await fetch("/api/generate-hint", { /* ... body ... */ });
                         const data = await res.json();
                         setHint(h => ({ ...h, [String(secIndex)]: data.hint ?? "暫無提示" }));
-                      } catch (err) { setHint(h => ({ ...h, [String(secIndex)]: "獲取提示失敗" })); }
+                      } catch {
+                        setHint(h => ({ ...h, [String(secIndex)]: "獲取提示失敗" }));
+                      }
                     }
                   }}
-                  style={(showHint[String(secIndex)] || isCorrectlySubmitted) ? { ...hintButtonStyle, ...disabledActionButtonStyle } : hintButtonStyle}
-                  disabled={showHint[String(secIndex)] || isCorrectlySubmitted}
+                  style={(showHint[String(secIndex)] || isCorrectAnswer) ? { ...hintButtonStyle, ...disabledActionButtonStyle } : hintButtonStyle}
+                  disabled={showHint[String(secIndex)] || isCorrectAnswer}
                 >
                   {showHint[String(secIndex)] ? "提示已顯示" : "需要提示"}
                 </button>
 
-                {isCorrectlySubmitted && currentQIdx < sec.questions.length - 1 && (
+                {isCorrectAnswer && currentQIdx < sec.questions.length - 1 && (
                   <button
                     onClick={() => {
                       setCurrentQuestionIdx(c => ({ ...c, [String(secIndex)]: currentQIdx + 1 }));
@@ -877,7 +893,7 @@ export default function GenerateCourse() {
                 </div>
               )}
               
-              {isCorrectlySubmitted && (
+              {isCorrectAnswer && (
                 <div style={feedbackCorrectStyle}>
                   ✅ 恭喜答對了！
                   {currentQIdx === sec.questions.length - 1 && <span> (🎉 本章練習結束)</span>}
@@ -1046,10 +1062,6 @@ export default function GenerateCourse() {
           {sections.map((sec, idx) => {
             const isExpanded = expandedSections[String(idx)];
             const isSectionLoading = loadingStep === 'sections' && !sec.content && !sec.error;
-            const currentQIdx = currentQuestionIdx[String(idx)] ?? 0;
-            const question = sec.questions?.[currentQIdx];
-            const submittedValue = submitted[String(idx)];
-            const isCorrectlySubmitted = submittedValue === true;
 
             return (
               <div key={idx} style={sectionCardStyle}>
