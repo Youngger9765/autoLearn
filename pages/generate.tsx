@@ -310,6 +310,12 @@ export default function GenerateCourse() {
   const [isBlockCollapsed, setIsBlockCollapsed] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [customSectionTitles, setCustomSectionTitles] = useState<string[]>(Array(numSections).fill(""));
+  const defaultContentTypes = [
+    { label: "講義", value: "lecture" },
+    { label: "影片", value: "video" },
+    { label: "練習題", value: "quiz" },
+  ];
+  const [contentTypes, setContentTypes] = useState(defaultContentTypes);
 
   // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
   const totalSteps = numSections * 3 + 1;
@@ -1159,48 +1165,148 @@ export default function GenerateCourse() {
             </div>
           </div>
 
-          {/* group3: 每章題數 & 題目型態 */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
-              <input
-                type="number"
-                id="numQuestions"
-                value={numQuestions}
-                onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
-                min="1" max="5"
-                style={numberInputStyle}
-                disabled={isGenerating}
-              />
-            </div>
-            <div>
-              <label style={inputLabelStyle}>題目型態 (可複選)</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
-                {[
-                  { label: "選擇題", value: "multiple_choice" },
-                  { label: "是非題", value: "true_false" },
-                  // { label: "簡答題", value: "short_answer" },
-                ].map((type) => (
-                  <label key={type.value} style={checkboxLabelStyle}>
-                    <input
-                      type="checkbox"
-                      value={type.value}
-                      checked={selectedQuestionTypes.includes(type.value)}
-                      onChange={(e) => {
-                        const { value, checked } = e.target;
-                        setSelectedQuestionTypes(prev =>
-                          checked ? [...prev, value] : prev.filter(t => t !== value)
-                        );
-                      }}
-                      disabled={isGenerating}
-                      style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
-                    />
-                    {type.label}
-                  </label>
+          {/* groupX: 內容型別設定（僅當練習題有被選擇時顯示） */}
+          {(selectedQuestionTypes.includes("multiple_choice") || selectedQuestionTypes.includes("true_false")) && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={inputLabelStyle}>內容型別（可拖曳排序、可刪除、可新增）</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.5rem' }}>
+                {contentTypes.map((type, idx) => (
+                  <div
+                    key={type.value}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('text/plain', idx.toString());
+                    }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                      const fromIdx = Number(e.dataTransfer.getData('text/plain'));
+                      if (fromIdx === idx) return;
+                      setContentTypes(prev => {
+                        const arr = [...prev];
+                        const [moved] = arr.splice(fromIdx, 1);
+                        arr.splice(idx, 0, moved);
+                        return arr;
+                      });
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: '#f3f4f6',
+                      borderRadius: '20px',
+                      padding: '0.4rem 1rem',
+                      fontSize: '0.95rem',
+                      fontWeight: 500,
+                      border: '1px solid #d1d5db',
+                      cursor: 'grab',
+                      userSelect: 'none',
+                    }}
+                    title="可拖曳排序"
+                  >
+                    <span>{type.label}</span>
+                    {contentTypes.length > 1 && (
+                      <button
+                        onClick={() => setContentTypes(prev => prev.filter((_, i) => i !== idx))}
+                        style={{
+                          marginLeft: '0.5rem',
+                          background: 'none',
+                          border: 'none',
+                          color: '#b91c1c',
+                          fontWeight: 700,
+                          fontSize: '1.1rem',
+                          cursor: 'pointer',
+                          lineHeight: 1,
+                        }}
+                        title="刪除"
+                        type="button"
+                      >✖</button>
+                    )}
+                  </div>
                 ))}
+                {/* 新增型別按鈕（獨立一行） */}
+                <button
+                  onClick={() => {
+                    const builtins = [
+                      { label: "講義", value: "lecture" },
+                      { label: "練習題", value: "quiz" },
+                      { label: "影片", value: "video" },
+                      { label: "討論", value: "discussion" },
+                    ];
+                    const canAdd = builtins.filter(b => !contentTypes.some(t => t.value === b.value));
+                    if (canAdd.length === 0) return;
+                    setContentTypes(prev => [...prev, canAdd[0]]);
+                  }}
+                  style={{
+                    background: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '2rem',
+                    height: '2rem',
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: '0.5rem',
+                  }}
+                  title="新增內容型別"
+                  type="button"
+                  disabled={contentTypes.length >= 4}
+                >＋</button>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                拖曳可排序，點擊 <span style={{ color: '#b91c1c' }}>✖</span> 可刪除，點 <b>＋</b> 可新增（最多 4 種）
               </div>
             </div>
-          </div>
+          )}
+
+          {/* group5 & group6: 僅當內容型別有練習題時才顯示 */}
+          {contentTypes.some(t => t.value === "quiz") && (
+            <>
+              {/* group5: 每章題數 */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
+                <input
+                  type="number"
+                  id="numQuestions"
+                  value={numQuestions}
+                  onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
+                  min="1" max="5"
+                  style={numberInputStyle}
+                  disabled={isGenerating}
+                />
+              </div>
+              {/* group6: 題目型態 (可複選) */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={inputLabelStyle}>題目型態 (可複選)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
+                  {[
+                    { label: "選擇題", value: "multiple_choice" },
+                    { label: "是非題", value: "true_false" },
+                    // { label: "簡答題", value: "short_answer" },
+                  ].map((type) => (
+                    <label key={type.value} style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        value={type.value}
+                        checked={selectedQuestionTypes.includes(type.value)}
+                        onChange={(e) => {
+                          const { value, checked } = e.target;
+                          setSelectedQuestionTypes(prev =>
+                            checked ? [...prev, value] : prev.filter(t => t !== value)
+                          );
+                        }}
+                        disabled={isGenerating}
+                        style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
+                      />
+                      {type.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* 產生按鈕 */}
           <div style={{ marginTop: '1rem' }}>
@@ -1274,137 +1380,156 @@ export default function GenerateCourse() {
                 {/* 卡片內容 (可展開) */}
                 {isExpanded && (
                   <div style={sectionContentStyle}>
-                    {/* 內容錯誤與重試 */}
-                    {sec.error && sec.error.type === "section" && (
-                      <div style={errorBoxStyle}>
-                        <span>{sec.error.message}</span>
-                        <button
-                          onClick={() => handleRetry(idx, "section")}
-                          disabled={sec.error.retrying}
-                          style={sec.error.retrying ? disabledRetryButtonStyle : retryButtonStyle}
-                          onMouseOver={(e) => { if (!sec.error?.retrying) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
-                          onMouseOut={(e) => { if (!sec.error?.retrying) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
-                        >
-                          {sec.error.retrying ? "重試中..." : "重試"}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* 講義內容 */}
-                    {sec.content ? (
-                      <div style={{ color: "#374151", marginBottom: '1.5rem', lineHeight: 1.7 }}>
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({ /* node, inline, */ className, children, ...props }) {
-                              const match = /language-(\w+)/.exec(className || '');
-                              return match ? (
-                                <SyntaxHighlighter
-                                  style={atomDark} language={match[1]} PreTag="div"
-                                  customStyle={{ borderRadius: '4px', fontSize: '0.85rem', margin: '0.5rem 0' }}
-                                  {...props}
+                    {/* 動態依 contentTypes 排序渲染內容 */}
+                    {contentTypes.map((type, typeIdx) => {
+                      if (type.value === "lecture") {
+                        return (
+                          <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                            <div style={{
+                              display: 'inline-block',
+                              background: '#e0e7ff',
+                              color: '#3730a3',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              padding: '0.2rem 0.8rem',
+                              fontSize: '0.95rem',
+                              marginBottom: '0.5rem'
+                            }}>講義</div>
+                            {/* 講義內容 */}
+                            {sec.content ? (
+                              <div style={{ color: "#374151", lineHeight: 1.7 }}>
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code({ className, children, ...props }) {
+                                      const match = /language-(\w+)/.exec(className || '');
+                                      return match ? (
+                                        <SyntaxHighlighter
+                                          style={atomDark} language={match[1]} PreTag="div"
+                                          customStyle={{ borderRadius: '4px', fontSize: '0.85rem', margin: '0.5rem 0' }}
+                                          {...props}
+                                        >
+                                          {String(children).replace(/\n$/, '')}
+                                        </SyntaxHighlighter>
+                                      ) : (
+                                        <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} className={className} {...props}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                    p: (props) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
+                                    ul: (props) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                                    ol: (props) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
+                                    li: (props) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
+                                    table: (props) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
+                                    thead: (props) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
+                                    th: (props) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
+                                    td: (props) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
+                                  }}
                                 >
-                                  {String(children).replace(/\n$/, '')}
-                                </SyntaxHighlighter>
-                              ) : (
-                                <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} className={className} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                            p: ({/* node, */ ...props}) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
-                            ul: ({/* node, */ ...props}) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                            ol: ({/* node, */ ...props}) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                            li: ({/* node, */ ...props}) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
-                            table: ({/* node, */ ...props}) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
-                            thead: ({/* node, */ ...props}) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
-                            th: ({/* node, */ ...props}) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
-                            td: ({/* node, */ ...props}) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
-                          }}
-                        >
-                          {sec.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : isSectionLoading ? (
-                      <div style={{ marginBottom: '1.5rem' }}>
-                        <SkeletonBlock height={20} width="90%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
-                        <SkeletonBlock height={20} width="80%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
-                        <SkeletonBlock height={20} width="85%" style={{ backgroundColor: '#e5e7eb' }} />
-                      </div>
-                    ) : null}
-
-                    {/* 影片錯誤與重試 */}
-                    {sec.error && sec.error.type === "video" && (
+                                  {sec.content}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              <div style={{ marginBottom: '1.5rem' }}>
+                                <SkeletonBlock height={20} width="90%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
+                                <SkeletonBlock height={20} width="80%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
+                                <SkeletonBlock height={20} width="85%" style={{ backgroundColor: '#e5e7eb' }} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (type.value === "video") {
+                        return (
+                          <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                            <div style={{
+                              display: 'inline-block',
+                              background: '#fef9c3',
+                              color: '#b45309',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              padding: '0.2rem 0.8rem',
+                              fontSize: '0.95rem',
+                              marginBottom: '0.5rem'
+                            }}>影片</div>
+                            {/* 影片內容 */}
+                            {sec.videoUrl ? (
+                              <div style={videoContainerStyle}>
+                                <iframe
+                                  style={iframeStyle}
+                                  src={sec.videoUrl.replace("watch?v=", "embed/")}
+                                  title={sec.title}
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              </div>
+                            ) : (
+                              <div style={videoContainerStyle}>
+                                <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (type.value === "quiz") {
+                        return (
+                          <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                            <div style={{
+                              display: 'inline-block',
+                              background: '#dcfce7',
+                              color: '#166534',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              padding: '0.2rem 0.8rem',
+                              fontSize: '0.95rem',
+                              marginBottom: '0.5rem'
+                            }}>練習題</div>
+                            {/* 練習題內容 */}
+                            {sec.questions && sec.questions.length > 0 ? (
+                              <div style={questionAreaStyle}>
+                                {renderQuestions(sec, idx)}
+                              </div>
+                            ) : (
+                              <div style={questionAreaStyle}>
+                                <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
+                                <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                  <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                  <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                  <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      // 你可以在這裡擴充更多型別（如討論）
+                      if (type.value === "discussion") {
+                        return (
+                          <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                            <div style={{
+                              display: 'inline-block',
+                              background: '#f3e8ff',
+                              color: '#7c3aed',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              padding: '0.2rem 0.8rem',
+                              fontSize: '0.95rem',
+                              marginBottom: '0.5rem'
+                            }}>討論</div>
+                            <div style={{ color: "#6b7280" }}>（討論區功能尚未實作）</div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                    {/* 章節錯誤與重試（可放在最下方或每個型別下方） */}
+                    {sec.error && (
                       <div style={errorBoxStyle}>
                         <span>{sec.error.message}</span>
-                        <button
-                          onClick={() => handleRetry(idx, "video")}
-                          disabled={sec.error.retrying || !sec.content}
-                          style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
-                          onMouseOver={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
-                          onMouseOut={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
-                        >
-                          {sec.error.retrying ? "重試中..." : "重試"}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* 影片區 */}
-                    {sec.videoUrl ? (
-                      <div style={videoContainerStyle}>
-                        <iframe
-                          style={iframeStyle}
-                          src={sec.videoUrl.replace("watch?v=", "embed/")}
-                          title={sec.title}
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
-                    ) : loadingStep === "videos" && sec.content && !sec.error ? (
-                      <div style={videoContainerStyle}>
-                        <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
-                      </div>
-                    ) : null}
-
-                    {/* 題目錯誤與重試 */}
-                    {sec.error && sec.error.type === "questions" && (
-                      <div style={errorBoxStyle}>
-                        <span>{sec.error.message}</span>
-                        {sec.error.message !== "因章節內容產生失敗，已跳過題目產生" &&
-                          sec.error.message !== "因章節內容為空，已跳過題目產生" && (
-                          <button
-                            onClick={() => handleRetry(idx, "questions")}
-                            disabled={sec.error.retrying || !sec.content}
-                            style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
-                            onMouseOver={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = '#fef2f2'; }}
-                            onMouseOut={(e) => { if (!sec.error?.retrying && sec.content) (e.target as HTMLButtonElement).style.backgroundColor = 'white'; }}
-                          >
-                            {sec.error.retrying ? "重試中..." : "重試"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 練習題區 */}
-                    {sec.questions && sec.questions.length > 0 && (
-                      <div style={questionAreaStyle}>
-                        {renderQuestions(sec, idx)}
-                      </div>
-                    )}
-
-                    {/* 題目載入骨架屏 */}
-                    {loadingStep === "questions" && (!sec.questions || sec.questions.length === 0) && !sec.error && sec.content && (
-                      <div style={questionAreaStyle}>
-                        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>
-                          <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
-                        </h4>
-                        <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                        </div>
+                        {/* ...重試按鈕... */}
                       </div>
                     )}
                   </div>
