@@ -395,81 +395,75 @@ export default function GenerateCourse() {
       let currentStep = 1; // 大綱已完成
 
       for (let i = 0; i < outlineArr.length; i++) {
-        // 2-1. 產生 section
-        setLoadingStep("sections");
-        setProgress(currentStep / totalSteps);
-        // 修改：接收回傳物件並檢查 error 屬性
-        const sectionResult = await fetchWithRetry<{ content: string }>("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
-
-        if (sectionResult.error) {
-          // 修改：設定章節錯誤狀態
-          sectionArr[i].error = {
-            type: "section",
-            message: sectionResult.error.message || "產生章節內容失敗",
-            retrying: false
-          };
-          setSections([...sectionArr]);
-          currentStep += 3; // 跳過 video/questions
-          continue; // 繼續下一個章節
-        }
-        sectionArr[i].content = sectionResult.data!.content;
-        sectionArr[i].error = undefined;
-        setSections([...sectionArr]);
-        currentStep++;
-
-        // 2-2. 產生 video
-        setLoadingStep("videos");
-        setProgress(currentStep / totalSteps);
-        // 修改：接收回傳物件並檢查 error 屬性
-        const videoResult = await fetchWithRetry<{ videoUrl: string }>("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
-
-        if (videoResult.error) {
-          // 修改：只記錄錯誤，不跳過 questions
-          sectionArr[i].error = {
-            type: "video",
-            message: videoResult.error.message || "產生影片失敗",
-            retrying: false
-          };
-          setSections([...sectionArr]);
-          currentStep++; // 只加一個步驟，繼續往下產生 questions
-        } else {
-          sectionArr[i].videoUrl = videoResult.data!.videoUrl;
-          // sectionArr[i].error = undefined; // 視情況決定是否清除舊錯誤
+        // 2-1. 產生 section（只有 lecture 有被選擇才產生）
+        if (contentTypes.some(t => t.value === "lecture")) {
+          setLoadingStep("sections");
+          setProgress(currentStep / totalSteps);
+          const sectionResult = await fetchWithRetry<{ content: string }>("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
+          if (sectionResult.error) {
+            sectionArr[i].error = {
+              type: "section",
+              message: sectionResult.error.message || "產生章節內容失敗",
+              retrying: false
+            };
+            setSections([...sectionArr]);
+            currentStep += contentTypes.filter(t => t.value !== "lecture").length + 1; // 跳過後續型別
+            continue;
+          }
+          sectionArr[i].content = sectionResult.data!.content;
+          sectionArr[i].error = undefined;
           setSections([...sectionArr]);
           currentStep++;
         }
 
-        // 2-3. 產生 questions
-        setLoadingStep("questions");
-        setProgress(currentStep / totalSteps);
-        const typesString = selectedQuestionTypes.join(",");
-        // 修改：接收回傳物件並檢查 error 屬性
-        const questionsResult = await fetchWithRetry<{ questions: Question[] }>("/api/generate-questions", {
-          sectionTitle: sectionArr[i].title,
-          sectionContent: sectionArr[i].content,
-          ...(targetAudience && { targetAudience }),
-          selectedQuestionTypes: typesString,
-          numQuestions
-        });
-
-        if (questionsResult.error) {
-           // 修改：設定章節錯誤狀態
-          sectionArr[i].error = {
-            type: "questions",
-            message: questionsResult.error.message || "產生題目失敗",
-            retrying: false
-          };
-          setSections([...sectionArr]);
-          currentStep++; // 題目步驟照算
-          continue; // 繼續下一個章節
+        // 2-2. 產生 video（只有 video 有被選擇才產生）
+        if (contentTypes.some(t => t.value === "video")) {
+          setLoadingStep("videos");
+          setProgress(currentStep / totalSteps);
+          const videoResult = await fetchWithRetry<{ videoUrl: string }>("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
+          if (videoResult.error) {
+            sectionArr[i].error = {
+              type: "video",
+              message: videoResult.error.message || "產生影片失敗",
+              retrying: false
+            };
+            setSections([...sectionArr]);
+            currentStep++;
+          } else {
+            sectionArr[i].videoUrl = videoResult.data!.videoUrl;
+            setSections([...sectionArr]);
+            currentStep++;
+          }
         }
-        // 確保回傳的 questions 是陣列
-        sectionArr[i].questions = Array.isArray(questionsResult.data?.questions)
-          ? questionsResult.data.questions
-          : [];
-        // sectionArr[i].error = undefined; // 視情況決定是否清除舊錯誤
-        setSections([...sectionArr]);
-        currentStep++;
+
+        // 2-3. 產生 questions（只有 quiz 有被選擇才產生）
+        if (contentTypes.some(t => t.value === "quiz")) {
+          setLoadingStep("questions");
+          setProgress(currentStep / totalSteps);
+          const typesString = selectedQuestionTypes.join(",");
+          const questionsResult = await fetchWithRetry<{ questions: Question[] }>("/api/generate-questions", {
+            sectionTitle: sectionArr[i].title,
+            sectionContent: sectionArr[i].content,
+            ...(targetAudience && { targetAudience }),
+            selectedQuestionTypes: typesString,
+            numQuestions
+          });
+          if (questionsResult.error) {
+            sectionArr[i].error = {
+              type: "questions",
+              message: questionsResult.error.message || "產生題目失敗",
+              retrying: false
+            };
+            setSections([...sectionArr]);
+            currentStep++;
+            continue;
+          }
+          sectionArr[i].questions = Array.isArray(questionsResult.data?.questions)
+            ? questionsResult.data.questions
+            : [];
+          setSections([...sectionArr]);
+          currentStep++;
+        }
       }
 
       setLoadingStep(null);
@@ -717,9 +711,14 @@ export default function GenerateCourse() {
   };
 
   const questionAreaStyle: CSSProperties = {
-    marginTop: '1.5rem',
-    paddingTop: '1.5rem',
-    borderTop: '1px solid #e5e7eb', // 分隔線
+    marginTop: '0.2rem',
+    paddingTop: 0,
+    paddingLeft: '1em',
+    // borderTop: '1px solid #e5e7eb', // 已移除
+  };
+
+  const lectureAreaStyle: CSSProperties = {
+    paddingLeft: '1em',
   };
 
   // 選項標籤基礎樣式 - 使用獨立邊框屬性
@@ -1397,7 +1396,7 @@ export default function GenerateCourse() {
                             }}>講義</div>
                             {/* 講義內容 */}
                             {sec.content ? (
-                              <div style={{ color: "#374151", lineHeight: 1.7 }}>
+                              <div style={{ ...lectureAreaStyle, color: "#374151", lineHeight: 1.7 }}>
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   components={{
@@ -1488,9 +1487,7 @@ export default function GenerateCourse() {
                             }}>練習題</div>
                             {/* 練習題內容 */}
                             {sec.questions && sec.questions.length > 0 ? (
-                              <div style={questionAreaStyle}>
-                                {renderQuestions(sec, idx)}
-                              </div>
+                              renderQuestions(sec, idx)
                             ) : (
                               <div style={questionAreaStyle}>
                                 <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
