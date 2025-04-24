@@ -1,4 +1,4 @@
-import { useState, Fragment, CSSProperties } from 'react';
+import { useState, Fragment, CSSProperties, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
@@ -285,9 +285,30 @@ export default function GenerateCourse() {
   const [showAssistant, setShowAssistant] = useState(false); // 新增：AI 助教展開/收合
   const [isBlockCollapsed, setIsBlockCollapsed] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [customSectionTitles, setCustomSectionTitles] = useState<string[]>(Array(numSections).fill(""));
 
   // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
   const totalSteps = numSections * 3 + 1;
+
+  // 當章節數變動時，自動調整 customSectionTitles 長度
+  useEffect(() => {
+    setCustomSectionTitles((prev) => {
+      const arr = [...prev];
+      arr.length = numSections;
+      for (let i = 0; i < numSections; i++) {
+        if (arr[i] === undefined) arr[i] = "";
+      }
+      return arr;
+    });
+  }, [numSections]);
+
+  const handleCustomSectionTitleChange = (idx: number, value: string) => {
+    setCustomSectionTitles((prev) => {
+      const arr = [...prev];
+      arr[idx] = value;
+      return arr;
+    });
+  };
 
   // 分步產生主流程
   const handleGenerate = async () => {
@@ -313,7 +334,12 @@ export default function GenerateCourse() {
     setLoadingStep("outline");
     let outlineArr: string[] = [];
     try {
-      const data = await fetchWithRetry("/api/generate-outline", { prompt, numSections, targetAudience }) as { outline: string[] };
+      const data = await fetchWithRetry("/api/generate-outline", {
+        prompt,
+        numSections,
+        targetAudience,
+        customSectionTitles: customSectionTitles.map(t => t.trim()),
+      }) as { outline: string[] };
       outlineArr = data.outline;
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
@@ -1041,6 +1067,23 @@ export default function GenerateCourse() {
               style={numberInputStyle}
               disabled={isGenerating}
             />
+            {/* 客製化章節標題 */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ ...inputLabelStyle, marginBottom: 0 }}>自訂章節名稱（可選填）</label>
+              {Array.from({ length: numSections }).map((_, idx) => (
+                <div key={idx} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#6b7280', minWidth: 32 }}>{idx + 1}.</span>
+                  <input
+                    type="text"
+                    value={customSectionTitles[idx] || ""}
+                    onChange={e => handleCustomSectionTitleChange(idx, e.target.value)}
+                    placeholder={`第 ${idx + 1} 章名稱（留空則由 AI 產生）`}
+                    style={{ ...inputStyle, width: '70%' }}
+                    disabled={isGenerating}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* group3: 每章題數 & 題目型態 */}
