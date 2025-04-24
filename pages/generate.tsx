@@ -26,7 +26,10 @@ type Section = {
 
 // --- Helper Functions & Components (使用內聯樣式) ---
 
-async function fetchWithRetry(url: string, body: unknown, retries = 2, delay = 1000): Promise<unknown> {
+// 修改 fetchWithRetry 回傳型別並處理錯誤回傳
+async function fetchWithRetry<T>(url: string, body: unknown, retries = 2, delay = 1000): Promise<{ data: T | null; error: Error | null }> {
+  let lastError: Error | null = null;
+
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, {
@@ -34,18 +37,40 @@ async function fetchWithRetry(url: string, body: unknown, retries = 2, delay = 1
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `HTTP error ${res.status}` }));
-        throw new Error(errorData.error || `請求失敗，狀態碼: ${res.status}`);
+        // 建立錯誤物件，但不立即拋出
+        lastError = new Error(errorData.error || `請求失敗，狀態碼: ${res.status}`);
+        if (i === retries) {
+           // 如果是最後一次嘗試，跳出迴圈，稍後回傳錯誤
+           break;
+        }
+        // 等待並重試
+        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+        continue; // 進入下一次迴圈
       }
-      return await res.json();
+
+      // 請求成功
+      const data = await res.json();
+      return { data: data as T, error: null }; // 回傳成功結果
+
     } catch (err) {
-      console.error(`Attempt ${i + 1} failed for ${url}:`, err);
-      if (i === retries) throw err;
+      // 捕捉網路錯誤或其他 fetch 期間的錯誤
+      lastError = err instanceof Error ? err : new Error("請求過程中發生未知錯誤");
+      console.error(`Attempt ${i + 1} failed for ${url}:`, lastError);
+      if (i === retries) {
+        // 如果是最後一次嘗試，跳出迴圈
+        break;
+      }
+      // 等待並重試
       await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
     }
   }
-  throw new Error("重試次數已用盡");
+
+  // 如果迴圈結束仍未成功回傳，表示所有重試都失敗了
+  // 回傳最後捕捉到的錯誤
+  return { data: null, error: lastError ?? new Error("重試次數已用盡，但未捕獲到具體錯誤") };
 }
 
 // 骨架屏元件 (使用內聯樣式和 style jsx)
@@ -311,129 +336,149 @@ export default function GenerateCourse() {
 
   // 分步產生主流程
   const handleGenerate = async () => {
-    setError("");
-    setSections([]);
-    setProgress(0);
-    setExpandedSections({});
-    setCurrentQuestionIdx({});
-    setSelectedOption({});
-    setSubmitted({});
-    setShowHint({});
-    setHint({});
-    setIsGenerating(true);
-
-    if (selectedQuestionTypes.length === 0) {
-      setError("請至少選擇一種題目型態再產生課程。");
-      setLoadingStep(null);
-      setIsGenerating(false);
-      return;
-    }
-
-    // 1. 產生大綱
-    setLoadingStep("outline");
-    let outlineArr: string[] = [];
     try {
-      const data = await fetchWithRetry("/api/generate-outline", {
+      setError("");
+      setSections([]);
+      setProgress(0);
+      setExpandedSections({});
+      setCurrentQuestionIdx({});
+      setSelectedOption({});
+      setSubmitted({});
+      setShowHint({});
+      setHint({});
+      setIsGenerating(true);
+
+      if (selectedQuestionTypes.length === 0) {
+        setError("請至少選擇一種題目型態再產生課程。");
+        // setLoadingStep(null); // 不需要，因為還沒開始
+        setIsGenerating(false);
+        return;
+      }
+
+      // 1. 產生大綱
+      setLoadingStep("outline");
+      let outlineArr: string[] = [];
+      // 修改：接收回傳物件並檢查 error 屬性
+      const outlineResult = await fetchWithRetry<{ outline: string[] }>("/api/generate-outline", {
         prompt,
         numSections,
         targetAudience,
         customSectionTitles: customSectionTitles.map(t => t.trim()),
-      }) as { outline: string[] };
-      outlineArr = data.outline;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "產生大綱失敗");
-      setLoadingStep(null);
-      setIsGenerating(false);
-      return;
-    }
+      });
 
-    const initialSections: Section[] = outlineArr.map(title => ({
-      title, content: "", questions: [], videoUrl: "", error: undefined
-    }));
-    setSections([...initialSections]);
-    if (initialSections.length > 0) setExpandedSections({ '0': true });
-
-    // 2. 依序產生每一個章節的內容、影片、題目
-    const sectionArr = [...initialSections];
-    const totalSteps = outlineArr.length * 3 + 1; // 1 (大綱) + 每章 3 步
-
-    let currentStep = 1; // 大綱已完成
-
-    for (let i = 0; i < outlineArr.length; i++) {
-      // 2-1. 產生 section
-      setLoadingStep("sections");
-      setProgress(currentStep / totalSteps);
-      try {
-        const data = await fetchWithRetry("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
-        sectionArr[i].content = (data as { content: string }).content;
-        sectionArr[i].error = undefined;
-      } catch (err) {
-        sectionArr[i].error = {
-          type: "section",
-          message: err instanceof Error ? err.message : "產生章節內容失敗",
-          retrying: false
-        };
-        setSections([...sectionArr]);
-        currentStep += 3; // 跳過 video/questions
-        continue;
+      if (outlineResult.error) {
+        // 修改：從回傳的 error 物件取得訊息
+        setError(outlineResult.error.message || "產生大綱失敗");
+        setLoadingStep(null);
+        setIsGenerating(false);
+        return;
       }
-      setSections([...sectionArr]);
-      currentStep++;
+      // 斷言 data 不為 null，因為 error 為 null
+      outlineArr = outlineResult.data!.outline;
 
-      // 2-2. 產生 video
-      setLoadingStep("videos");
-      setProgress(currentStep / totalSteps);
-      try {
-        const data = await fetchWithRetry("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
-        sectionArr[i].videoUrl = (data as { videoUrl: string }).videoUrl;
+
+      const initialSections: Section[] = outlineArr.map(title => ({
+        title, content: "", questions: [], videoUrl: "", error: undefined
+      }));
+      setSections([...initialSections]);
+      if (initialSections.length > 0) setExpandedSections({ '0': true });
+
+      // 2. 依序產生每一個章節的內容、影片、題目
+      const sectionArr = [...initialSections];
+      const totalSteps = outlineArr.length * 3 + 1; // 1 (大綱) + 每章 3 步
+      let currentStep = 1; // 大綱已完成
+
+      for (let i = 0; i < outlineArr.length; i++) {
+        // 2-1. 產生 section
+        setLoadingStep("sections");
+        setProgress(currentStep / totalSteps);
+        // 修改：接收回傳物件並檢查 error 屬性
+        const sectionResult = await fetchWithRetry<{ content: string }>("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
+
+        if (sectionResult.error) {
+          // 修改：設定章節錯誤狀態
+          sectionArr[i].error = {
+            type: "section",
+            message: sectionResult.error.message || "產生章節內容失敗",
+            retrying: false
+          };
+          setSections([...sectionArr]);
+          currentStep += 3; // 跳過 video/questions
+          continue; // 繼續下一個章節
+        }
+        sectionArr[i].content = sectionResult.data!.content;
         sectionArr[i].error = undefined;
-      } catch (err) {
-        sectionArr[i].error = {
-          type: "video",
-          message: err instanceof Error ? err.message : "產生影片失敗",
-          retrying: false
-        };
         setSections([...sectionArr]);
-        currentStep += 2; // 跳過 questions
-        continue;
-      }
-      setSections([...sectionArr]);
-      currentStep++;
+        currentStep++;
 
-      // 2-3. 產生 questions
-      setLoadingStep("questions");
-      setProgress(currentStep / totalSteps);
-      try {
+        // 2-2. 產生 video
+        setLoadingStep("videos");
+        setProgress(currentStep / totalSteps);
+        // 修改：接收回傳物件並檢查 error 屬性
+        const videoResult = await fetchWithRetry<{ videoUrl: string }>("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
+
+        if (videoResult.error) {
+          // 修改：只記錄錯誤，不跳過 questions
+          sectionArr[i].error = {
+            type: "video",
+            message: videoResult.error.message || "產生影片失敗",
+            retrying: false
+          };
+          setSections([...sectionArr]);
+          currentStep++; // 只加一個步驟，繼續往下產生 questions
+        } else {
+          sectionArr[i].videoUrl = videoResult.data!.videoUrl;
+          // sectionArr[i].error = undefined; // 視情況決定是否清除舊錯誤
+          setSections([...sectionArr]);
+          currentStep++;
+        }
+
+        // 2-3. 產生 questions
+        setLoadingStep("questions");
+        setProgress(currentStep / totalSteps);
         const typesString = selectedQuestionTypes.join(",");
-        const data = await fetchWithRetry("/api/generate-questions", {
+        // 修改：接收回傳物件並檢查 error 屬性
+        const questionsResult = await fetchWithRetry<{ questions: Question[] }>("/api/generate-questions", {
           sectionTitle: sectionArr[i].title,
           sectionContent: sectionArr[i].content,
           ...(targetAudience && { targetAudience }),
           selectedQuestionTypes: typesString,
           numQuestions
         });
-        sectionArr[i].questions = Array.isArray((data as { questions: unknown[] }).questions)
-          ? (data as { questions: Question[] }).questions
+
+        if (questionsResult.error) {
+           // 修改：設定章節錯誤狀態
+          sectionArr[i].error = {
+            type: "questions",
+            message: questionsResult.error.message || "產生題目失敗",
+            retrying: false
+          };
+          setSections([...sectionArr]);
+          currentStep++; // 題目步驟照算
+          continue; // 繼續下一個章節
+        }
+        // 確保回傳的 questions 是陣列
+        sectionArr[i].questions = Array.isArray(questionsResult.data?.questions)
+          ? questionsResult.data.questions
           : [];
-        sectionArr[i].error = undefined;
-      } catch (err) {
-        sectionArr[i].error = {
-          type: "questions",
-          message: err instanceof Error ? err.message : "產生題目失敗",
-          retrying: false
-        };
+        // sectionArr[i].error = undefined; // 視情況決定是否清除舊錯誤
         setSections([...sectionArr]);
         currentStep++;
-        continue;
       }
-      setSections([...sectionArr]);
-      currentStep++;
-    }
 
-    setLoadingStep(null);
-    setProgress(1);
-    setIsGenerating(false);
-    setIsBlockCollapsed(true);
+      setLoadingStep(null);
+      setProgress(1); // 確保進度條滿
+      setIsGenerating(false);
+      setIsBlockCollapsed(true);
+    // 注意：這裡的 try...catch 仍然捕捉 handleGenerate 函數內 *其他* 可能的同步錯誤
+    // 但 fetchWithRetry 本身的錯誤已經在內部處理並回傳了
+    } catch (err) {
+      // 這個 catch 現在主要處理非 fetchWithRetry 造成的預期外錯誤
+      setError(err instanceof Error ? err.message : "產生課程時發生未預期錯誤");
+      setIsGenerating(false);
+      setLoadingStep(null);
+      setProgress(0); // 重設進度
+    }
   };
 
   // --- 重試邏輯 ---
@@ -441,37 +486,44 @@ export default function GenerateCourse() {
     const currentSections = [...sections];
     const sectionToRetry = currentSections[sectionIndex];
 
+    // 標記為正在重試
     if (sectionToRetry.error) {
       sectionToRetry.error.retrying = true;
-      setSections([...currentSections]);
     } else {
-      console.warn(`Retrying ${type} for section ${sectionIndex} without an existing error.`);
-      return;
+      // 如果沒有錯誤也允許重試，則創建一個臨時的 error 物件來標記 retrying
+      sectionToRetry.error = { type, message: `正在重試 ${type}...`, retrying: true };
     }
+    setSections([...currentSections]); // 更新 UI 顯示正在重試
+
+    let result: { data: any | null; error: Error | null } | null = null;
+    let success = false; // 標記 API 呼叫是否成功
 
     try {
       let requestBody = {};
       let apiUrl = "";
-      let data: unknown;
 
       switch (type) {
         case "section":
           apiUrl = "/api/generate-section";
           requestBody = { sectionTitle: sectionToRetry.title, courseTitle: prompt, targetAudience };
-          data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.content = (data as { content: string }).content;
-          sectionToRetry.error = undefined; // 清除錯誤
+          result = await fetchWithRetry<{ content: string }>(apiUrl, requestBody);
+          if (!result.error && result.data) {
+            sectionToRetry.content = result.data.content;
+            success = true;
+          }
           break;
         case "video":
-          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空");
+          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空"); // 這個 throw 會被下面的 catch 捕捉
           apiUrl = "/api/generate-video";
           requestBody = { sectionTitle: sectionToRetry.title, sectionContent: sectionToRetry.content, targetAudience };
-          data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.videoUrl = (data as { videoUrl: string }).videoUrl;
-          sectionToRetry.error = undefined;
+          result = await fetchWithRetry<{ videoUrl: string }>(apiUrl, requestBody);
+          if (!result.error && result.data) {
+            sectionToRetry.videoUrl = result.data.videoUrl;
+            success = true;
+          }
           break;
         case "questions":
-          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空");
+          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空"); // 這個 throw 會被下面的 catch 捕捉
           apiUrl = "/api/generate-questions";
           const typesString = selectedQuestionTypes.join(",");
           requestBody = {
@@ -479,22 +531,47 @@ export default function GenerateCourse() {
             sectionContent: sectionToRetry.content,
             ...(targetAudience && { targetAudience }),
             selectedQuestionTypes: typesString,
-          numQuestions
+            numQuestions
           };
-          data = await fetchWithRetry(apiUrl, requestBody);
-          sectionToRetry.questions = Array.isArray((data as { questions: unknown[] }).questions)
-            ? (data as { questions: Question[] }).questions
-            : [];
-          sectionToRetry.error = undefined;
+          result = await fetchWithRetry<{ questions: Question[] }>(apiUrl, requestBody);
+          if (!result.error && result.data) {
+            sectionToRetry.questions = Array.isArray(result.data.questions)
+              ? result.data.questions
+              : [];
+            success = true;
+          }
           break;
       }
-      setSections([...currentSections]); // 更新成功狀態
-      } catch (err) {
-      console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, err);
+
+      // 根據 API 呼叫結果更新狀態
+      if (success) {
+        sectionToRetry.error = undefined; // 清除錯誤
+      } else if (result?.error) {
+        // 如果 fetchWithRetry 回傳錯誤
+        console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, result.error);
+        sectionToRetry.error = {
+          type: type,
+          message: result.error.message || `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
+          retrying: false // 重試失敗
+        };
+      } else {
+        // 處理 result 為 null 或其他未預期情況 (理論上不太會發生)
+         console.error(`重試 ${type} 時發生未預期狀況 (Sec ${sectionIndex + 1})`);
+         sectionToRetry.error = {
+           type: type,
+           message: `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}時發生未知錯誤`,
+           retrying: false
+         };
+      }
+      setSections([...currentSections]); // 更新最終狀態 (成功或失敗)
+
+    } catch (err) {
+      // 這個 catch 現在主要捕捉 switch case 中的檢查錯誤 (例如 content 為空) 或其他非預期的同步錯誤
+      console.error(`處理重試 ${type} 時發生內部錯誤 (Sec ${sectionIndex + 1}):`, err);
       sectionToRetry.error = {
         type: type,
-        message: err instanceof Error ? err.message : `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
-        retrying: false // 重試失敗，設置為 false
+        message: err instanceof Error ? err.message : `處理重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}時發生錯誤`,
+        retrying: false // 處理失敗
       };
       setSections([...currentSections]); // 更新失敗狀態
     }

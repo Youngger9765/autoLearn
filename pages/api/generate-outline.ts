@@ -36,7 +36,7 @@ ${outline
       `.trim();
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4.1-mini",
         messages: [
           { role: "system", content: "你是一個課程設計助理，請用繁體中文回覆。" },
           { role: "user", content: aiPrompt },
@@ -62,7 +62,7 @@ ${outline
     `.trim();
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: "你是一個課程設計助理，請用繁體中文回覆。" },
         { role: "user", content: aiPrompt },
@@ -70,10 +70,23 @@ ${outline
       temperature: 0.7,
     });
 
-    outline = completion.choices[0].message.content
-      ?.split("\n")
-      .map((t) => t.replace(/^[\d\.、章：:]+/, "").trim())
-      .filter(Boolean) || [];
+    const content = completion.choices[0].message.content?.trim() || "";
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        outline = parsed.map((t) => String(t).replace(/^[\d\.、章：:]+/, "").trim()).filter(Boolean);
+      }
+    } catch {
+      outline = content
+        .split("\n")
+        .map((t) => t.replace(/^[\d\.、章：:]+/, "").trim())
+        .filter((t) =>
+          t &&
+          !/^(Sure|以下|希望|這些|章節標題|幫助|主題|標題|^$)/i.test(t) &&
+          !/^[\[\]{}"']+$/.test(t)
+        )
+        .slice(0, Number(numSections));
+    }
   }
 
   res.status(200).json({ outline });
