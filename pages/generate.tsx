@@ -82,8 +82,7 @@ function ChatAssistant({ allContent, targetAudience, onClose }: { allContent: st
         threadId,
         targetAudience,
       });
-      const data = await res.data;
-      if (!res.ok) throw new Error(data.error || "AI 回應失敗");
+      const data = res.data;
 
       setMessages(msgs => [
         ...msgs,
@@ -279,7 +278,7 @@ export default function GenerateCourse() {
   const [hint, setHint] = useState<{ [sectionIdx: string]: string | null }>({});
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
   const [numSections, setNumSections] = useState(5);
-  const [targetAudience, setTargetAudience] = useState("");
+  const [targetAudience, setTargetAudience] = useState<string[]>([]);
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]);
   const [numQuestions, setNumQuestions] = useState(2);
   const [showAssistant, setShowAssistant] = useState(false); // 新增：AI 助教展開/收合
@@ -534,12 +533,6 @@ export default function GenerateCourse() {
     border: '1px solid #d1d5db', // 灰色邊框
     borderRadius: '6px',
     boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
-  };
-
-  const selectStyle: CSSProperties = {
-    ...inputStyle,
-    width: 'auto', // 下拉選單寬度自適應
-    minWidth: '120px',
   };
 
   const numberInputStyle: CSSProperties = {
@@ -1348,7 +1341,7 @@ export default function GenerateCourse() {
           {showAssistant && (
             <ChatAssistant
               allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')}
-              targetAudience={targetAudience}
+              targetAudience={targetAudience.join(',')}
               onClose={() => setShowAssistant(false)}
             />
           )}

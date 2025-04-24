@@ -8,7 +8,7 @@ async function checkYouTubeVideoExists(videoId: string): Promise<boolean> {
     try {
         const res = await fetch(url)
         return res.ok
-    } catch (e) {
+    } catch {
         return false
     }
 }
