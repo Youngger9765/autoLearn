@@ -281,8 +281,8 @@ export default function GenerateCourse() {
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]);
   const [numQuestions, setNumQuestions] = useState(2);
   const [showAssistant, setShowAssistant] = useState(false); // 新增：AI 助教展開/收合
-
-  const isGenerating = !!loadingStep;
+  const [isBlockCollapsed, setIsBlockCollapsed] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
   const totalSteps = numSections * 3 + 1;
@@ -298,10 +298,12 @@ export default function GenerateCourse() {
     setSubmitted({});
     setShowHint({});
     setHint({});
+    setIsGenerating(true);
 
     if (selectedQuestionTypes.length === 0) {
       setError("請至少選擇一種題目型態再產生課程。");
       setLoadingStep(null);
+      setIsGenerating(false);
       return;
     }
 
@@ -314,6 +316,7 @@ export default function GenerateCourse() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "產生大綱失敗");
       setLoadingStep(null);
+      setIsGenerating(false);
       return;
     }
 
@@ -402,6 +405,8 @@ export default function GenerateCourse() {
 
     setLoadingStep(null);
     setProgress(1);
+    setIsGenerating(false);
+    setIsBlockCollapsed(true);
   };
 
   // --- 重試邏輯 ---
@@ -944,120 +949,140 @@ export default function GenerateCourse() {
         </p>
       </div>
 
-      {/* 課程輸入區 */}
-      <div style={cardStyle}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}> {/* 預設單欄 */}
-          {/* 主題輸入 */}
-          <div>
-            <label htmlFor="prompt" style={inputLabelStyle}>
-              課程主題 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(例如：Python 入門、數據分析基礎)</span>
-            </label>
-        <input
-          type="text"
-              id="prompt"
-          value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="輸入你想學習的主題..."
-              style={inputStyle}
-              disabled={isGenerating}
-            />
-          </div>
-
-          {/* 進階設定 (桌面版可能多欄) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
-            {/* 目標年級 */}
-          <div>
-              <label htmlFor="targetAudience" style={inputLabelStyle}>目標年級</label>
-            <select
-              id="targetAudience"
-              value={targetAudience}
-                onChange={(e) => setTargetAudience(e.target.value)}
-                style={selectStyle}
-                disabled={isGenerating}
-              >
-                <option value="">-- 通用 --</option>
-                <option value="國小低年級">國小低年級</option>
-                <option value="國小中年級">國小中年級</option>
-                <option value="國小高年級">國小高年級</option>
-                <option value="國中生">國中生</option>
-                <option value="高中生">高中生</option>
-                <option value="大學生">大學生</option>
-                <option value="社會人士">社會人士</option>
-            </select>
-          </div>
-
-            {/* 章節數 */}
-          <div>
-              <label htmlFor="numSections" style={inputLabelStyle}>章節數 (3-10)</label>
-            <input
-              type="number"
-                id="numSections"
-                value={numSections}
-                onChange={(e) => setNumSections(Math.max(3, Math.min(10, parseInt(e.target.value, 10) || 3)))}
-                min="3" max="10"
-                style={numberInputStyle}
+      {/* 設定區塊收合/展開按鈕 */}
+      <div style={{ marginBottom: '1rem', textAlign: 'right' }}>
+        <button
+          onClick={() => setIsBlockCollapsed((prev) => !prev)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#2563eb',
+            fontWeight: 600,
+            fontSize: '1rem',
+            cursor: 'pointer',
+            outline: 'none',
+            padding: 0,
+          }}
+        >
+          {isBlockCollapsed ? '展開課程設定 ⬇️' : '收合課程設定 ⬆️'}
+        </button>
+      </div>
+      {/* 課程輸入區（可收合） */}
+      {!isBlockCollapsed && (
+        <div style={cardStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+            {/* 主題輸入 */}
+            <div>
+              <label htmlFor="prompt" style={inputLabelStyle}>
+                課程主題 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(例如：Python 入門、數據分析基礎)</span>
+              </label>
+              <input
+                type="text"
+                id="prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="輸入你想學習的主題..."
+                style={inputStyle}
                 disabled={isGenerating}
               />
             </div>
 
-            {/* 每章題數 */}
+            {/* 進階設定 (桌面版可能多欄) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
+              {/* 目標年級 */}
+              <div>
+                <label htmlFor="targetAudience" style={inputLabelStyle}>目標年級</label>
+                <select
+                  id="targetAudience"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  style={selectStyle}
+                  disabled={isGenerating}
+                >
+                  <option value="">-- 通用 --</option>
+                  <option value="國小低年級">國小低年級</option>
+                  <option value="國小中年級">國小中年級</option>
+                  <option value="國小高年級">國小高年級</option>
+                  <option value="國中生">國中生</option>
+                  <option value="高中生">高中生</option>
+                  <option value="大學生">大學生</option>
+                  <option value="社會人士">社會人士</option>
+                </select>
+              </div>
+
+              {/* 章節數 */}
+              <div>
+                <label htmlFor="numSections" style={inputLabelStyle}>章節數 (3-10)</label>
+                <input
+                  type="number"
+                  id="numSections"
+                  value={numSections}
+                  onChange={(e) => setNumSections(Math.max(3, Math.min(10, parseInt(e.target.value, 10) || 3)))}
+                  min="3" max="10"
+                  style={numberInputStyle}
+                  disabled={isGenerating}
+                />
+              </div>
+
+              {/* 每章題數 */}
+              <div>
+                <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
+                <input
+                  type="number"
+                  id="numQuestions"
+                  value={numQuestions}
+                  onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
+                  min="1" max="5"
+                  style={numberInputStyle}
+                  disabled={isGenerating}
+                />
+              </div>
+            </div>
+
+            {/* 題目型態 */}
             <div>
-              <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
-              <input
-                type="number"
-                id="numQuestions"
-              value={numQuestions}
-                onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
-                min="1" max="5"
-                style={numberInputStyle}
-                disabled={isGenerating}
-            />
+              <label style={inputLabelStyle}>題目型態 (可複選)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
+                {[
+                  { label: "選擇題", value: "multiple_choice" },
+                  { label: "是非題", value: "true_false" },
+                  // { label: "簡答題", value: "short_answer" },
+                ].map((type) => (
+                  <label key={type.value} style={checkboxLabelStyle}>
+                    <input
+                      type="checkbox"
+                      value={type.value}
+                      checked={selectedQuestionTypes.includes(type.value)}
+                      onChange={(e) => {
+                        const { value, checked } = e.target;
+                        setSelectedQuestionTypes(prev =>
+                          checked ? [...prev, value] : prev.filter(t => t !== value)
+                        );
+                      }}
+                      disabled={isGenerating}
+                      style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
+                    />
+                    {type.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 產生按鈕 */}
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !prompt.trim()}
+                style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
+                onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
+                onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
+              >
+                {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
+              </button>
+            </div>
           </div>
         </div>
-
-          {/* 題目型態 */}
-          <div>
-            <label style={inputLabelStyle}>題目型態 (可複選)</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
-              {[
-                { label: "選擇題", value: "multiple_choice" },
-                { label: "是非題", value: "true_false" },
-                // { label: "簡答題", value: "short_answer" },
-              ].map((type) => (
-                <label key={type.value} style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-                    value={type.value}
-                    checked={selectedQuestionTypes.includes(type.value)}
-                    onChange={(e) => {
-                      const { value, checked } = e.target;
-                setSelectedQuestionTypes(prev =>
-                        checked ? [...prev, value] : prev.filter(t => t !== value)
-                );
-              }}
-                    disabled={isGenerating}
-                    style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
-            />
-                  {type.label}
-          </label>
-              ))}
-        </div>
-          </div>
-
-          {/* 產生按鈕 */}
-          <div style={{ marginTop: '1rem' }}>
-        <button
-          onClick={handleGenerate}
-              disabled={isGenerating || !prompt.trim()}
-              style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
-              onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
-              onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
-            >
-              {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
-        </button>
-      </div>
-          </div>
-          </div>
+      )}
 
       {/* 全局錯誤訊息 (非產生中) */}
       {error && !isGenerating && (
@@ -1091,26 +1116,26 @@ export default function GenerateCourse() {
             return (
               <div key={idx} style={sectionCardStyle}>
                 {/* 標題列 */}
-              <div
-                style={{
-                      ...sectionHeaderStyle,
-                      borderBottom: isExpanded ? '1px solid #e5e7eb' : 'none', // 收合時移除底線
+                <div
+                  style={{
+                    ...sectionHeaderStyle,
+                    borderBottom: isExpanded ? '1px solid #e5e7eb' : 'none', // 收合時移除底線
                   }}
                   onClick={() => setExpandedSections(s => ({ ...s, [String(idx)]: !isExpanded }))}
                 >
                   <h3 style={sectionTitleStyle}>
                     {sec.title || <SkeletonBlock width="40%" height={24} style={{ backgroundColor: '#e5e7eb' }} />}
-                </h3>
+                  </h3>
                   {/* 載入/錯誤指示 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
-                     {sec.error && <span title={sec.error.message} style={{ color: '#ef4444', fontSize: '1.1rem' }}>⚠️</span>}
-                     {isGenerating && !sec.error && (
-                       (loadingStep === 'sections' && !sec.content) ||
-                       (loadingStep === 'videos' && sec.content && !sec.videoUrl) ||
-                       (loadingStep === 'questions' && sec.content && (!sec.questions || sec.questions.length === 0))
-                     ) && <SkeletonBlock height={16} width={16} style={{ borderRadius: '50%', backgroundColor: '#d1d5db' }} />}
-                     <span style={{ fontSize: '1rem', color: '#6b7280', transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
-              </div>
+                    {sec.error && <span title={sec.error.message} style={{ color: '#ef4444', fontSize: '1.1rem' }}>⚠️</span>}
+                    {isGenerating && !sec.error && (
+                      (loadingStep === 'sections' && !sec.content) ||
+                      (loadingStep === 'videos' && sec.content && !sec.videoUrl) ||
+                      (loadingStep === 'questions' && sec.content && (!sec.questions || sec.questions.length === 0))
+                    ) && <SkeletonBlock height={16} width={16} style={{ borderRadius: '50%', backgroundColor: '#d1d5db' }} />}
+                    <span style={{ fontSize: '1rem', color: '#6b7280', transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+                  </div>
                 </div>
 
                 {/* 卡片內容 (可展開) */}
@@ -1177,9 +1202,9 @@ export default function GenerateCourse() {
 
                     {/* 影片錯誤與重試 */}
                     {sec.error && sec.error.type === "video" && (
-                       <div style={errorBoxStyle}>
+                      <div style={errorBoxStyle}>
                         <span>{sec.error.message}</span>
-                      <button
+                        <button
                           onClick={() => handleRetry(idx, "video")}
                           disabled={sec.error.retrying || !sec.content}
                           style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
@@ -1188,25 +1213,25 @@ export default function GenerateCourse() {
                         >
                           {sec.error.retrying ? "重試中..." : "重試"}
                         </button>
-                    </div>
-                  )}
+                      </div>
+                    )}
 
                     {/* 影片區 */}
                     {sec.videoUrl ? (
                       <div style={videoContainerStyle}>
-                      <iframe
+                        <iframe
                           style={iframeStyle}
-                        src={sec.videoUrl.replace("watch?v=", "embed/")}
-                        title={sec.title}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
+                          src={sec.videoUrl.replace("watch?v=", "embed/")}
+                          title={sec.title}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
                         />
                       </div>
                     ) : loadingStep === "videos" && sec.content && !sec.error ? (
-                       <div style={videoContainerStyle}>
-                         <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
-                       </div>
+                      <div style={videoContainerStyle}>
+                        <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                      </div>
                     ) : null}
 
                     {/* 題目錯誤與重試 */}
@@ -1214,8 +1239,8 @@ export default function GenerateCourse() {
                       <div style={errorBoxStyle}>
                         <span>{sec.error.message}</span>
                         {sec.error.message !== "因章節內容產生失敗，已跳過題目產生" &&
-                         sec.error.message !== "因章節內容為空，已跳過題目產生" && (
-                      <button
+                          sec.error.message !== "因章節內容為空，已跳過題目產生" && (
+                          <button
                             onClick={() => handleRetry(idx, "questions")}
                             disabled={sec.error.retrying || !sec.content}
                             style={(sec.error.retrying || !sec.content) ? disabledRetryButtonStyle : retryButtonStyle}
@@ -1225,33 +1250,33 @@ export default function GenerateCourse() {
                             {sec.error.retrying ? "重試中..." : "重試"}
                           </button>
                         )}
-                    </div>
-                  )}
+                      </div>
+                    )}
 
                     {/* 練習題區 */}
-                  {sec.questions && sec.questions.length > 0 && (
+                    {sec.questions && sec.questions.length > 0 && (
                       <div style={questionAreaStyle}>
                         {renderQuestions(sec, idx)}
-                              </div>
-                            )}
+                      </div>
+                    )}
 
                     {/* 題目載入骨架屏 */}
                     {loadingStep === "questions" && (!sec.questions || sec.questions.length === 0) && !sec.error && sec.content && (
                       <div style={questionAreaStyle}>
-                         <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>
-                           <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
-                         </h4>
-                         <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                           <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
-                          </div>
-                    </div>
-                  )}
-            </div>
-              )}
-            </div>
+                        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>
+                          <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
+                        </h4>
+                        <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                          <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
