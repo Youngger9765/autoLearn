@@ -495,7 +495,7 @@ export default function GenerateCourse() {
     }
     setSections([...currentSections]); // 更新 UI 顯示正在重試
 
-    let result: { data: any | null; error: Error | null } | null = null;
+    let result: { data: unknown | null; error: Error | null } | null = null;
     let success = false; // 標記 API 呼叫是否成功
 
     try {
@@ -508,22 +508,24 @@ export default function GenerateCourse() {
           requestBody = { sectionTitle: sectionToRetry.title, courseTitle: prompt, targetAudience };
           result = await fetchWithRetry<{ content: string }>(apiUrl, requestBody);
           if (!result.error && result.data) {
-            sectionToRetry.content = result.data.content;
+            const data = result.data as { content: string };
+            sectionToRetry.content = data.content;
             success = true;
           }
           break;
         case "video":
-          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空"); // 這個 throw 會被下面的 catch 捕捉
+          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空");
           apiUrl = "/api/generate-video";
           requestBody = { sectionTitle: sectionToRetry.title, sectionContent: sectionToRetry.content, targetAudience };
           result = await fetchWithRetry<{ videoUrl: string }>(apiUrl, requestBody);
           if (!result.error && result.data) {
-            sectionToRetry.videoUrl = result.data.videoUrl;
+            const data = result.data as { videoUrl: string };
+            sectionToRetry.videoUrl = data.videoUrl;
             success = true;
           }
           break;
         case "questions":
-          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空"); // 這個 throw 會被下面的 catch 捕捉
+          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空");
           apiUrl = "/api/generate-questions";
           const typesString = selectedQuestionTypes.join(",");
           requestBody = {
@@ -535,8 +537,9 @@ export default function GenerateCourse() {
           };
           result = await fetchWithRetry<{ questions: Question[] }>(apiUrl, requestBody);
           if (!result.error && result.data) {
-            sectionToRetry.questions = Array.isArray(result.data.questions)
-              ? result.data.questions
+            const data = result.data as { questions: Question[] };
+            sectionToRetry.questions = Array.isArray(data.questions)
+              ? data.questions
               : [];
             success = true;
           }
