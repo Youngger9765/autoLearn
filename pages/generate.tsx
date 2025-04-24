@@ -482,103 +482,7 @@ export default function GenerateCourse() {
   };
 
   // --- 重試邏輯 ---
-  const handleRetry = async (sectionIndex: number, type: "section" | "video" | "questions") => {
-    const currentSections = [...sections];
-    const sectionToRetry = currentSections[sectionIndex];
-
-    // 標記為正在重試
-    if (sectionToRetry.error) {
-      sectionToRetry.error.retrying = true;
-    } else {
-      // 如果沒有錯誤也允許重試，則創建一個臨時的 error 物件來標記 retrying
-      sectionToRetry.error = { type, message: `正在重試 ${type}...`, retrying: true };
-    }
-    setSections([...currentSections]); // 更新 UI 顯示正在重試
-
-    let result: { data: unknown | null; error: Error | null } | null = null;
-    let success = false; // 標記 API 呼叫是否成功
-
-    try {
-      let requestBody = {};
-      let apiUrl = "";
-
-      switch (type) {
-        case "section":
-          apiUrl = "/api/generate-section";
-          requestBody = { sectionTitle: sectionToRetry.title, courseTitle: prompt, targetAudience };
-          result = await fetchWithRetry<{ content: string }>(apiUrl, requestBody);
-          if (!result.error && result.data) {
-            const data = result.data as { content: string };
-            sectionToRetry.content = data.content;
-            success = true;
-          }
-          break;
-        case "video":
-          if (!sectionToRetry.content) throw new Error("無法重試影片：章節內容為空");
-          apiUrl = "/api/generate-video";
-          requestBody = { sectionTitle: sectionToRetry.title, sectionContent: sectionToRetry.content, targetAudience };
-          result = await fetchWithRetry<{ videoUrl: string }>(apiUrl, requestBody);
-          if (!result.error && result.data) {
-            const data = result.data as { videoUrl: string };
-            sectionToRetry.videoUrl = data.videoUrl;
-            success = true;
-          }
-          break;
-        case "questions":
-          if (!sectionToRetry.content) throw new Error("無法重試題目：章節內容為空");
-          apiUrl = "/api/generate-questions";
-          const typesString = selectedQuestionTypes.join(",");
-          requestBody = {
-            sectionTitle: sectionToRetry.title,
-            sectionContent: sectionToRetry.content,
-            ...(targetAudience && { targetAudience }),
-            selectedQuestionTypes: typesString,
-            numQuestions
-          };
-          result = await fetchWithRetry<{ questions: Question[] }>(apiUrl, requestBody);
-          if (!result.error && result.data) {
-            const data = result.data as { questions: Question[] };
-            sectionToRetry.questions = Array.isArray(data.questions)
-              ? data.questions
-              : [];
-            success = true;
-          }
-          break;
-      }
-
-      // 根據 API 呼叫結果更新狀態
-      if (success) {
-        sectionToRetry.error = undefined; // 清除錯誤
-      } else if (result?.error) {
-        // 如果 fetchWithRetry 回傳錯誤
-        console.error(`重試 ${type} 失敗 (Sec ${sectionIndex + 1}):`, result.error);
-        sectionToRetry.error = {
-          type: type,
-          message: result.error.message || `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}失敗`,
-          retrying: false // 重試失敗
-        };
-      } else {
-        // 處理 result 為 null 或其他未預期情況 (理論上不太會發生)
-         console.error(`重試 ${type} 時發生未預期狀況 (Sec ${sectionIndex + 1})`);
-         sectionToRetry.error = {
-           type: type,
-           message: `重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}時發生未知錯誤`,
-           retrying: false
-         };
-      }
-      setSections([...currentSections]); // 更新最終狀態 (成功或失敗)
-
-    } catch (err) {
-      // 這個 catch 現在主要捕捉 switch case 中的檢查錯誤 (例如 content 為空) 或其他非預期的同步錯誤
-      console.error(`處理重試 ${type} 時發生內部錯誤 (Sec ${sectionIndex + 1}):`, err);
-      sectionToRetry.error = {
-        type: type,
-        message: err instanceof Error ? err.message : `處理重試${type === 'section' ? '章節內容' : type === 'video' ? '影片' : '題目'}時發生錯誤`,
-        retrying: false // 處理失敗
-      };
-      setSections([...currentSections]); // 更新失敗狀態
-    }
-  };
+  // （整個 handleRetry function 刪除）
 
   // --- 樣式定義 ---
   const containerStyle: CSSProperties = {
@@ -838,25 +742,6 @@ export default function GenerateCourse() {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-  };
-
-  const retryButtonStyle: CSSProperties = {
-      marginLeft: '0.75rem',
-      backgroundColor: 'white',
-      color: '#b91c1c',
-      border: '1px solid #b91c1c',
-      borderRadius: '4px',
-      padding: '0.25rem 0.5rem',
-      fontSize: '0.75rem',
-      fontWeight: 600,
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-  };
-
-  const disabledRetryButtonStyle: CSSProperties = {
-      ...retryButtonStyle,
-      opacity: 0.5,
-      cursor: 'not-allowed',
   };
 
   const titleStyle: CSSProperties = {
@@ -1169,21 +1054,21 @@ export default function GenerateCourse() {
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={inputLabelStyle}>內容型別（可拖曳排序、可刪除、可新增）</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.5rem' }}>
-                {contentTypes.map((type, idx) => (
+                {contentTypes.map((type) => (
                   <div
                     key={type.value}
                     draggable
                     onDragStart={e => {
-                      e.dataTransfer.setData('text/plain', idx.toString());
+                      e.dataTransfer.setData('text/plain', type.value);
                     }}
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => {
                       const fromIdx = Number(e.dataTransfer.getData('text/plain'));
-                      if (fromIdx === idx) return;
+                      if (fromIdx === contentTypes.indexOf(type)) return;
                       setContentTypes(prev => {
                         const arr = [...prev];
                         const [moved] = arr.splice(fromIdx, 1);
-                        arr.splice(idx, 0, moved);
+                        arr.splice(contentTypes.indexOf(type), 0, moved);
                         return arr;
                       });
                     }}
@@ -1204,7 +1089,7 @@ export default function GenerateCourse() {
                     <span>{type.label}</span>
                     {contentTypes.length > 1 && (
                       <button
-                        onClick={() => setContentTypes(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => setContentTypes(prev => prev.filter(t => t !== type))}
                         style={{
                           marginLeft: '0.5rem',
                           background: 'none',
@@ -1349,7 +1234,7 @@ export default function GenerateCourse() {
 
           {sections.map((sec, idx) => {
             const isExpanded = expandedSections[String(idx)];
-            const isSectionLoading = loadingStep === 'sections' && !sec.content && !sec.error;
+            // （這行刪除）
 
             return (
               <div key={idx} style={sectionCardStyle}>
@@ -1380,7 +1265,7 @@ export default function GenerateCourse() {
                 {isExpanded && (
                   <div style={sectionContentStyle}>
                     {/* 動態依 contentTypes 排序渲染內容 */}
-                    {contentTypes.map((type, typeIdx) => {
+                    {contentTypes.map((type) => {
                       if (type.value === "lecture") {
                         return (
                           <div key={type.value} style={{ marginBottom: '1.5rem' }}>
