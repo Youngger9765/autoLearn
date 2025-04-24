@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
 import remarkGfm from 'remark-gfm';
+import axios from "axios";
 
 // 臨時型別定義（請根據實際情況調整）
 type Question = {
@@ -75,12 +76,13 @@ function ChatAssistant({ allContent, targetAudience, onClose }: { allContent: st
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", { // 確保 API 路徑正確
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allContent, question: input, threadId, targetAudience }),
+      const res = await axios.post("/api/chat", {
+        allContent,
+        question: input,
+        threadId,
+        targetAudience,
       });
-      const data = await res.json();
+      const data = await res.data;
       if (!res.ok) throw new Error(data.error || "AI 回應失敗");
 
       setMessages(msgs => [
@@ -970,76 +972,91 @@ export default function GenerateCourse() {
       {/* 課程輸入區（可收合） */}
       {!isBlockCollapsed && (
         <div style={cardStyle}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-            {/* 主題輸入 */}
-            <div>
-              <label htmlFor="prompt" style={inputLabelStyle}>
-                課程主題 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(例如：Python 入門、數據分析基礎)</span>
-              </label>
+          {/* group0: 主題設定 */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="prompt" style={inputLabelStyle}>
+              課程主題或敘述 <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(例如：Python 入門、數據分析基礎)</span>
+            </label>
+            <textarea
+              id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="請輸入你想學習的主題或需求描述..."
+              style={{
+                ...inputStyle,
+                minHeight: '80px',
+                width: '100%',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                fontSize: '1.05rem',
+                boxSizing: 'border-box',
+                padding: '1.25rem 1.5rem', // 上下 1.25rem，左右 1.5rem
+              }}
+              disabled={isGenerating}
+            />
+          </div>
+
+          {/* group1: 目標年級 */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="targetAudience" style={inputLabelStyle}>目標年級</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
+              {[
+                { label: "國小低年級", value: "國小低年級" },
+                { label: "國小中年級", value: "國小中年級" },
+                { label: "國小高年級", value: "國小高年級" },
+                { label: "國中生", value: "國中生" },
+                { label: "高中生", value: "高中生" },
+                { label: "大學生", value: "大學生" },
+                { label: "社會人士", value: "社會人士" },
+              ].map((opt) => (
+                <label key={opt.value} style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    value={opt.value}
+                    checked={targetAudience.includes(opt.value)}
+                    onChange={(e) => {
+                      const { value, checked } = e.target;
+                      setTargetAudience(prev =>
+                        checked ? [...prev, value] : prev.filter(t => t !== value)
+                      );
+                    }}
+                    disabled={isGenerating}
+                    style={{ width: '1rem', height: '1rem', accentColor: '#2563eb' }} // 調整 checkbox 樣式
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* group2: 章節數 */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="numSections" style={inputLabelStyle}>章節數 (3-10)</label>
+            <input
+              type="number"
+              id="numSections"
+              value={numSections}
+              onChange={(e) => setNumSections(Math.max(3, Math.min(10, parseInt(e.target.value, 10) || 3)))}
+              min="3" max="10"
+              style={numberInputStyle}
+              disabled={isGenerating}
+            />
+          </div>
+
+          {/* group3: 每章題數 & 題目型態 */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
               <input
-                type="text"
-                id="prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="輸入你想學習的主題..."
-                style={inputStyle}
+                type="number"
+                id="numQuestions"
+                value={numQuestions}
+                onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
+                min="1" max="5"
+                style={numberInputStyle}
                 disabled={isGenerating}
               />
             </div>
-
-            {/* 進階設定 (桌面版可能多欄) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
-              {/* 目標年級 */}
-              <div>
-                <label htmlFor="targetAudience" style={inputLabelStyle}>目標年級</label>
-                <select
-                  id="targetAudience"
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value)}
-                  style={selectStyle}
-                  disabled={isGenerating}
-                >
-                  <option value="">-- 通用 --</option>
-                  <option value="國小低年級">國小低年級</option>
-                  <option value="國小中年級">國小中年級</option>
-                  <option value="國小高年級">國小高年級</option>
-                  <option value="國中生">國中生</option>
-                  <option value="高中生">高中生</option>
-                  <option value="大學生">大學生</option>
-                  <option value="社會人士">社會人士</option>
-                </select>
-              </div>
-
-              {/* 章節數 */}
-              <div>
-                <label htmlFor="numSections" style={inputLabelStyle}>章節數 (3-10)</label>
-                <input
-                  type="number"
-                  id="numSections"
-                  value={numSections}
-                  onChange={(e) => setNumSections(Math.max(3, Math.min(10, parseInt(e.target.value, 10) || 3)))}
-                  min="3" max="10"
-                  style={numberInputStyle}
-                  disabled={isGenerating}
-                />
-              </div>
-
-              {/* 每章題數 */}
-              <div>
-                <label htmlFor="numQuestions" style={inputLabelStyle}>每章題數 (1-5)</label>
-                <input
-                  type="number"
-                  id="numQuestions"
-                  value={numQuestions}
-                  onChange={(e) => setNumQuestions(Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)))}
-                  min="1" max="5"
-                  style={numberInputStyle}
-                  disabled={isGenerating}
-                />
-              </div>
-            </div>
-
-            {/* 題目型態 */}
             <div>
               <label style={inputLabelStyle}>題目型態 (可複選)</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem' }}>
@@ -1067,19 +1084,19 @@ export default function GenerateCourse() {
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* 產生按鈕 */}
-            <div style={{ marginTop: '1rem' }}>
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || !prompt.trim()}
-                style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
-                onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
-                onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
-              >
-                {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
-              </button>
-            </div>
+          {/* 產生按鈕 */}
+          <div style={{ marginTop: '1rem' }}>
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating || !prompt.trim()}
+              style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
+              onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
+              onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
+            >
+              {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
+            </button>
           </div>
         </div>
       )}

@@ -44,11 +44,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 2. 執行 assistant
     let run;
     let audienceInstruction = "";
-    if (targetAudience && targetAudience !== "other" && !isNaN(Number(targetAudience))) {
+
+    // 支援複選年級
+    let audienceList: string[] = [];
+    if (Array.isArray(targetAudience)) {
+      // 過濾掉 "other" 與空值
+      audienceList = targetAudience.filter((a) => a && a !== "other");
+      if (audienceList.length > 0) {
+        audienceInstruction = `\n請注意，學生的背景是「${audienceList.join("、")} 年級」，請用適合他們的語氣和深度回答。`;
+      }
+      if (targetAudience.includes("other")) {
+        audienceInstruction += `\n請注意，學生的背景也包含「一般使用者」，請用適合他們的語氣和深度回答。`;
+      }
+    } else if (targetAudience && targetAudience !== "other" && !isNaN(Number(targetAudience))) {
       audienceInstruction = `\n請注意，學生的背景是「${targetAudience} 年級」，請用適合他們的語氣和深度回答。`;
     } else if (targetAudience === "other") {
       audienceInstruction = `\n請注意，學生的背景是「一般使用者」，請用適合他們的語氣和深度回答。`;
     }
+
     if (!threadId) {
       // 第一次提問，傳 instructions
       run = await openai.beta.threads.runs.create(thread_id, {
