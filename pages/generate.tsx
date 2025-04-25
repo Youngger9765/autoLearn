@@ -5,6 +5,8 @@ import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
 import remarkGfm from 'remark-gfm';
 import axios from "axios";
 import Image from 'next/image';
+import dynamic from "next/dynamic";
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 // 臨時型別定義（請根據實際情況調整）
 type Question = {
@@ -315,6 +317,7 @@ export default function GenerateCourse() {
     { label: "講義", value: "lecture" },
     { label: "影片", value: "video" },
     { label: "練習題", value: "quiz" },
+    { label: "討論", value: "discussion" },
   ];
   const [contentTypes, setContentTypes] = useState(defaultContentTypes);
   const [completedSteps, setCompletedSteps] = useState(0);
@@ -341,6 +344,11 @@ export default function GenerateCourse() {
       return arr;
     });
   };
+
+  // 新增：討論題狀態
+  const [discussionAnswers, setDiscussionAnswers] = useState<{ [sectionIdx: string]: string }>({});
+  const [discussionFeedback, setDiscussionFeedback] = useState<{ [sectionIdx: string]: string }>({});
+  const [discussionLoading, setDiscussionLoading] = useState<{ [sectionIdx: string]: boolean }>({});
 
   // 分步產生主流程
   const handleGenerate = async () => {
@@ -1399,7 +1407,7 @@ export default function GenerateCourse() {
                           </div>
                         );
                       }
-                      // 你可以在這裡擴充更多型別（如討論）
+                      // 新增：討論題狀態
                       if (type.value === "discussion") {
                         return (
                           <div key={type.value} style={{ marginBottom: '1.5rem' }}>
@@ -1413,7 +1421,93 @@ export default function GenerateCourse() {
                               fontSize: '0.95rem',
                               marginBottom: '0.5rem'
                             }}>討論</div>
-                            <div style={{ color: "#6b7280" }}>（討論區功能尚未實作）</div>
+                            {/* 申論題內容 */}
+                            <div style={{ margin: '1rem 0' }}>
+                              <strong>申論題：</strong>
+                              <div style={{ margin: '0.5rem 0 1rem 0', color: '#4b5563' }}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {sec.content
+                                    ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。\n\n你可以參考以下內容：\n\n${sec.content.length > 300 ? sec.content.slice(0, 300) + '...' : sec.content}`
+                                    : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                  }
+                                </ReactMarkdown>
+                              </div>
+                              <div data-color-mode="light">
+                                <MDEditor
+                                  value={discussionAnswers[String(idx)] || ""}
+                                  onChange={val => setDiscussionAnswers(ans => ({ ...ans, [String(idx)]: val || "" }))}
+                                  height={200}
+                                  preview="live"
+                                  textareaProps={{
+                                    placeholder: "請在此輸入你的申論內容（支援 Markdown 排版）...",
+                                    disabled: discussionLoading[String(idx)],
+                                  }}
+                                />
+                              </div>
+                              <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                                支援 <a href="https://markdown.tw/" target="_blank" rel="noopener noreferrer">Markdown</a> 排版
+                              </div>
+                              <div>
+                                <button
+                                  onClick={async () => {
+                                    setDiscussionLoading(l => ({ ...l, [String(idx)]: true }));
+                                    setDiscussionFeedback(f => ({ ...f, [String(idx)]: "" }));
+                                    try {
+                                      const res = await fetch("/api/grade-essay", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          sectionTitle: sec.title,
+                                          sectionContent: sec.content,
+                                          essay: discussionAnswers[String(idx)] || "",
+                                        }),
+                                      });
+                                      const data = await res.json();
+                                      setDiscussionFeedback(f => ({ ...f, [String(idx)]: data.feedback || "AI 批改失敗，請稍後再試。" }));
+                                    } catch {
+                                      setDiscussionFeedback(f => ({ ...f, [String(idx)]: "AI 批改失敗，請稍後再試。" }));
+                                    } finally {
+                                      setDiscussionLoading(l => ({ ...l, [String(idx)]: false }));
+                                    }
+                                  }}
+                                  disabled={
+                                    !discussionAnswers[String(idx)] ||
+                                    discussionLoading[String(idx)]
+                                  }
+                                  style={{
+                                    backgroundColor: '#7c3aed',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    padding: '0.5rem 1.25rem',
+                                    fontSize: '0.95rem',
+                                    fontWeight: 600,
+                                    cursor: discussionLoading[String(idx)] ? 'not-allowed' : 'pointer',
+                                    opacity: !discussionAnswers[String(idx)] ? 0.5 : 1,
+                                    marginRight: '1rem'
+                                  }}
+                                >
+                                  {discussionLoading[String(idx)] ? "批改中..." : "送出並批改"}
+                                </button>
+                              </div>
+                              {/* 顯示 AI 批改建議（支援 markdown） */}
+                              {discussionFeedback[String(idx)] && (
+                                <div style={{
+                                  marginTop: '1rem',
+                                  background: '#f3e8ff',
+                                  color: '#7c3aed',
+                                  borderRadius: 6,
+                                  padding: '0.75rem 1rem',
+                                  fontSize: '0.98rem',
+                                  whiteSpace: 'pre-line'
+                                }}>
+                                  <strong>AI 批改建議：</strong>
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {discussionFeedback[String(idx)]}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       }
