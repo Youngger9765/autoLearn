@@ -1411,7 +1411,7 @@ export default function GenerateCourse() {
                               <div style={{ margin: '0.5rem 0 1rem 0', color: '#4b5563' }}>
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                   {sec.content
-                                    ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。\n\n你可以參考以下內容：\n\n${sec.content.length > 300 ? sec.content.slice(0, 300) + '...' : sec.content}`
+                                    ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
                                     : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
                                   }
                                 </ReactMarkdown>
