@@ -39,14 +39,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else if (targetAudience === "other") {
     audienceText = `，目標對象是「一般使用者」`;
   }
-  const sys_prompt = `請根據章節「${sectionTitle}」${audienceText}${
+  const  = `請根據章節「${sectionTitle}」${audienceText}${
     sectionContent ? `內容：「${sectionContent}」` : ""
   }，推薦一個最適合的 YouTube 影片，**只回傳影片網址，不要多餘說明**。`;
 
   try {
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: sys_prompt }
+        { role: "system", content: user_prompt }
       ],
       model: "gpt-4.1-mini"
     });
