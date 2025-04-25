@@ -65,10 +65,10 @@ ${finalUserText}
     const feedback = completion.choices[0].message?.content || "無法取得 AI 回覆";
 
     res.status(200).json({ feedback });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("OpenAI API error:", error);
     res.status(500).json({ 
-      error: error.message || JSON.stringify(error) || "AI 批改失敗",
+      error: error instanceof Error ? error.message : JSON.stringify(error) || "AI 批改失敗",
       fullError: error // 直接回傳整個 error 物件
     });
   }

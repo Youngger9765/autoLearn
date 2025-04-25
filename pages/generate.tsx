@@ -297,7 +297,6 @@ export default function GenerateCourse() {
   const [loadingStep, setLoadingStep] = useState<"outline" | "sections" | "videos" | "questions" | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [error, setError] = useState("");
-  const [progress, setProgress] = useState(0);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState<{ [sectionIdx: string]: number }>({});
   const [selectedOption, setSelectedOption] = useState<{ [sectionIdx: string]: string | null }>({});
   // submitted 狀態: true (答對), string (嘗試過的錯誤答案), undefined (未提交)
@@ -355,7 +354,6 @@ export default function GenerateCourse() {
     try {
       setError("");
       setSections([]);
-      setProgress(0);
       setCompletedSteps(0);
       setExpandedSections({});
       setCurrentQuestionIdx({});
@@ -408,7 +406,6 @@ export default function GenerateCourse() {
         // 2-1. 產生 section（只有 lecture 有被選擇才產生）
         if (contentTypes.some(t => t.value === "lecture")) {
           setLoadingStep("sections");
-          setProgress(i / totalSteps);
           const sectionResult = await fetchWithRetry<{ content: string }>("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
           if (sectionResult.error) {
             sectionArr[i].error = {
@@ -428,8 +425,6 @@ export default function GenerateCourse() {
 
         // 2-2. 產生 video（只有 video 有被選擇才產生）
         if (contentTypes.some(t => t.value === "video")) {
-          setLoadingStep("videos");
-          setProgress(i / totalSteps);
           const videoResult = await fetchWithRetry<{ videoUrl: string }>("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
           if (videoResult.error) {
             sectionArr[i].error = {
@@ -448,8 +443,6 @@ export default function GenerateCourse() {
 
         // 2-3. 產生 questions（只有 quiz 有被選擇才產生）
         if (contentTypes.some(t => t.value === "quiz")) {
-          setLoadingStep("questions");
-          setProgress(i / totalSteps);
           const typesString = selectedQuestionTypes.join(",");
           const questionsResult = await fetchWithRetry<{ questions: Question[] }>("/api/generate-questions", {
             sectionTitle: sectionArr[i].title,
@@ -487,7 +480,6 @@ export default function GenerateCourse() {
       setError(err instanceof Error ? err.message : "產生課程時發生未預期錯誤");
       setIsGenerating(false);
       setLoadingStep(null);
-      setProgress(0); // 重設進度
     }
   };
 
@@ -614,14 +606,6 @@ export default function GenerateCourse() {
     width: '100%',
     maxWidth: '640px', // 限制最大寬度
     margin: '0 auto 1.5rem auto', // 置中並添加底部間距
-  };
-
-  const iframeStyle: CSSProperties = {
-    width: '100%',
-    height: '100%',
-    borderRadius: '8px', // 圓角
-    border: '1px solid #d1d5db', // 邊框
-    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)', // 陰影
   };
 
   const questionAreaStyle: CSSProperties = {
