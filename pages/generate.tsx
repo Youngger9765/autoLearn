@@ -1221,6 +1221,33 @@ export default function GenerateCourse() {
                 >
                   <h3 style={sectionTitleStyle}>
                     {sec.title || <SkeletonBlock width="40%" height={24} style={{ backgroundColor: '#e5e7eb' }} />}
+                    {/* === 新增：練習題進度顯示 === */}
+                    {contentTypes.some(t => t.value === "quiz") && sec.questions && sec.questions.length > 0 && (
+                      <span style={{ fontSize: '0.95rem', color: '#2563eb', marginLeft: 12, fontWeight: 500 }}>
+                        練習題（
+                        {
+                          (() => {
+                            const currentQIdx = currentQuestionIdx[String(idx)] ?? 0;
+                            const submittedValue = submitted[String(idx)];
+                            const question = sec.questions?.[currentQIdx];
+                            let correctCount = currentQIdx;
+                            let isCorrectAnswer = false;
+                            if (question) {
+                              const isTF = question.options && question.options.length === 2 && question.options.every((opt: string) => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
+                              isCorrectAnswer = submittedValue !== undefined && (
+                                isTF
+                                  ? (submittedValue === '是' && ['是', 'True', '對'].includes(question.answer)) ||
+                                    (submittedValue === '否' && ['否', 'False', '錯'].includes(question.answer))
+                                  : submittedValue === question.answer
+                              );
+                              if (isCorrectAnswer) correctCount += 1;
+                            }
+                            return `${correctCount}/${sec.questions.length}`;
+                          })()
+                        }
+                        ）
+                      </span>
+                    )}
                   </h3>
                   {/* 載入/錯誤指示 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
