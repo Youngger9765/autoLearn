@@ -51,7 +51,7 @@ ${finalUserText}
       messages: [
         {
           role: "system",
-          content: "你是一位專業的領域專家老師，請針對學生的段落給予批改與建議。",
+          content: "你是一位專業的領域專家老師，請針對學生的回答給予批改與建議，主要判斷他是否學會這個章節的內容。",
         },
         {
           role: "user",
