@@ -777,9 +777,19 @@ export default function GenerateCourse() {
         : submittedValue === question.answer
     );
 
+    // === 新增：計算已答對題數 ===
+    // 只要 currentQuestionIdx >= 1，代表前面題目都已答對
+    // 如果目前這題也答對，則 +1
+    const totalQuestions = sec.questions.length;
+    let correctCount = currentQIdx;
+    if (isCorrectAnswer) correctCount += 1;
+
     return (
       <div style={questionAreaStyle}>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>隨堂練習</h4>
+        {/* === 修改這裡，顯示進度 === */}
+        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>
+          隨堂練習（{correctCount}/{totalQuestions}）
+        </h4>
         <div>
           <div style={{ marginBottom: '1rem', fontWeight: 500, color: '#1f2937' }}>
             <ReactMarkdown
