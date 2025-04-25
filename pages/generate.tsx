@@ -317,6 +317,7 @@ export default function GenerateCourse() {
     { label: "練習題", value: "quiz" },
   ];
   const [contentTypes, setContentTypes] = useState(defaultContentTypes);
+  const [completedSteps, setCompletedSteps] = useState(0);
 
   // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
   const totalSteps = numSections * 3 + 1;
@@ -347,6 +348,7 @@ export default function GenerateCourse() {
       setError("");
       setSections([]);
       setProgress(0);
+      setCompletedSteps(0);
       setExpandedSections({});
       setCurrentQuestionIdx({});
       setSelectedOption({});
@@ -392,14 +394,13 @@ export default function GenerateCourse() {
 
       // 2. 依序產生每一個章節的內容、影片、題目
       const sectionArr = [...initialSections];
-      const totalSteps = outlineArr.length * 3 + 1; // 1 (大綱) + 每章 3 步
-      let currentStep = 1; // 大綱已完成
+      const totalSteps = outlineArr.length * contentTypes.length;
 
       for (let i = 0; i < outlineArr.length; i++) {
         // 2-1. 產生 section（只有 lecture 有被選擇才產生）
         if (contentTypes.some(t => t.value === "lecture")) {
           setLoadingStep("sections");
-          setProgress(currentStep / totalSteps);
+          setProgress(i / totalSteps);
           const sectionResult = await fetchWithRetry<{ content: string }>("/api/generate-section", { sectionTitle: outlineArr[i], courseTitle: prompt, targetAudience });
           if (sectionResult.error) {
             sectionArr[i].error = {
@@ -408,19 +409,19 @@ export default function GenerateCourse() {
               retrying: false
             };
             setSections([...sectionArr]);
-            currentStep += contentTypes.filter(t => t.value !== "lecture").length + 1; // 跳過後續型別
+            setCompletedSteps(prev => prev + 1);
             continue;
           }
           sectionArr[i].content = sectionResult.data!.content;
           sectionArr[i].error = undefined;
           setSections([...sectionArr]);
-          currentStep++;
+          setCompletedSteps(prev => prev + 1);
         }
 
         // 2-2. 產生 video（只有 video 有被選擇才產生）
         if (contentTypes.some(t => t.value === "video")) {
           setLoadingStep("videos");
-          setProgress(currentStep / totalSteps);
+          setProgress(i / totalSteps);
           const videoResult = await fetchWithRetry<{ videoUrl: string }>("/api/generate-video", { sectionTitle: sectionArr[i].title, sectionContent: sectionArr[i].content, targetAudience });
           if (videoResult.error) {
             sectionArr[i].error = {
@@ -429,18 +430,18 @@ export default function GenerateCourse() {
               retrying: false
             };
             setSections([...sectionArr]);
-            currentStep++;
+            setCompletedSteps(prev => prev + 1);
           } else {
             sectionArr[i].videoUrl = videoResult.data!.videoUrl;
             setSections([...sectionArr]);
-            currentStep++;
+            setCompletedSteps(prev => prev + 1);
           }
         }
 
         // 2-3. 產生 questions（只有 quiz 有被選擇才產生）
         if (contentTypes.some(t => t.value === "quiz")) {
           setLoadingStep("questions");
-          setProgress(currentStep / totalSteps);
+          setProgress(i / totalSteps);
           const typesString = selectedQuestionTypes.join(",");
           const questionsResult = await fetchWithRetry<{ questions: Question[] }>("/api/generate-questions", {
             sectionTitle: sectionArr[i].title,
@@ -456,19 +457,19 @@ export default function GenerateCourse() {
               retrying: false
             };
             setSections([...sectionArr]);
-            currentStep++;
+            setCompletedSteps(prev => prev + 1);
             continue;
           }
           sectionArr[i].questions = Array.isArray(questionsResult.data?.questions)
             ? questionsResult.data.questions
             : [];
           setSections([...sectionArr]);
-          currentStep++;
+          setCompletedSteps(prev => prev + 1);
         }
       }
 
       setLoadingStep(null);
-      setProgress(1); // 確保進度條滿
+      setCompletedSteps(totalSteps);
       setIsGenerating(false);
       setIsBlockCollapsed(true);
     // 注意：這裡的 try...catch 仍然捕捉 handleGenerate 函數內 *其他* 可能的同步錯誤
@@ -759,8 +760,8 @@ export default function GenerateCourse() {
     color: '#4b5563'
   };
 
-  // --- 計算進度百分比 (修正) ---
-  const currentProgressValue = totalSteps > 0 ? Math.round((progress / totalSteps) * 100) : 0;
+  // --- 計算進度百分比 (更細緻) ---
+  const progressValue = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
   // --- 結束修正 ---
 
   // --- 處理題目顯示和互動的邏輯 ---
@@ -1219,10 +1220,9 @@ export default function GenerateCourse() {
       {/* 進度條 */}
       {isGenerating && (
         <div style={{ margin: "1.5rem 0" }}>
-          <progress value={progress} max={totalSteps} style={{ width: '100%', height: '8px', appearance: 'none' }}>
-          </progress>
+          <progress value={completedSteps} max={totalSteps} style={{ width: '100%', height: '8px', appearance: 'none' }} />
           <p style={{ textAlign: 'center', fontSize: '0.875rem', color: '#4b5563', marginTop: '0.5rem' }}>
-            正在產生 {loadingStep}... ({currentProgressValue}%)
+            正在產生 {loadingStep}...（{completedSteps} / {totalSteps}，{progressValue}%）
           </p>
         </div>
       )}
