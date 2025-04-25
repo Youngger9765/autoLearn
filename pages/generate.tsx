@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
 import remarkGfm from 'remark-gfm';
 import axios from "axios";
+import Image from 'next/image';
 
 // 臨時型別定義（請根據實際情況調整）
 type Question = {
@@ -1339,14 +1340,25 @@ export default function GenerateCourse() {
                             }}>影片</div>
                             {/* 影片內容 */}
                             {sec.videoUrl ? (
-                              <div style={videoContainerStyle}>
-                                <iframe
-                                  style={iframeStyle}
-                                  src={sec.videoUrl.replace("watch?v=", "embed/")}
-                                  title={sec.title}
-                                  frameBorder="0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
+                              <div
+                                style={{
+                                  width: '100%',
+                                  maxWidth: 640,
+                                  aspectRatio: '16/9',
+                                  background: '#ccc',
+                                  overflow: 'hidden',
+                                  borderRadius: 8,
+                                  margin: '0 auto',
+                                  position: 'relative',
+                                }}
+                              >
+                                <Image
+                                  src={sec.videoUrl}
+                                  alt="影片示意圖"
+                                  fill
+                                  style={{
+                                    objectFit: 'cover'
+                                  }}
                                 />
                               </div>
                             ) : (
