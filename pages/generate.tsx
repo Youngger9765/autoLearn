@@ -90,7 +90,7 @@ function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: n
 }
 
 // AI 助教元件 (使用內聯樣式)
-function ChatAssistant({ allContent, targetAudience, onClose }: { allContent: string, targetAudience: string, onClose?: () => void }) {
+function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { allContent: string, targetAudience: string, quizHistory: any[], onClose?: () => void }) {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,6 +109,7 @@ function ChatAssistant({ allContent, targetAudience, onClose }: { allContent: st
         question: input,
         threadId,
         targetAudience,
+        quizHistory,
       });
       const data = res.data;
 
@@ -1687,6 +1688,7 @@ export default function GenerateCourse() {
                     ].filter(Boolean).join('\n\n')
                   ).join('\n\n=====\n\n')}
                   targetAudience={targetAudience.join(',')}
+                  quizHistory={quizHistory}
                   onClose={() => setShowAssistant(false)}
                 />
               </div>

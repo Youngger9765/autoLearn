@@ -102,7 +102,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // 2. context 整理
       let context = '';
       if (intent === 'ask_quiz') {
-        context = allContent.split('【練習題】')[1]?.split('====')[0] || '';
+        // 只加入最新一筆 quiz history
+        const quizHistory = req.body.quizHistory;
+        let quizHistoryText = '';
+        if (Array.isArray(quizHistory) && quizHistory.length > 0) {
+          const item = quizHistory[quizHistory.length - 1];
+          if (item) {
+            const answers = (item.answers || []).map(a =>
+              `  - ${a.correct ? '✅' : '❌'} ${new Date(a.timestamp).toLocaleString('zh-TW')} 答案：${a.userAnswer}`
+            ).join('\n');
+            quizHistoryText = `\n【最近一次做題紀錄】\n${item.question}\n${answers}`;
+          }
+        }
+        context = quizHistoryText;
       } else if (intent === 'ask_lecture') {
         context = allContent.split('【講義】')[1]?.split('====')[0] || '';
       } else if (intent === 'ask_video') {
