@@ -1051,94 +1051,129 @@ export default function GenerateCourse() {
           {(selectedQuestionTypes.includes("multiple_choice") || selectedQuestionTypes.includes("true_false")) && (
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={inputLabelStyle}>內容型別（可拖曳排序、可刪除、可新增）</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.5rem' }}>
-                {contentTypes.map((type) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                {contentTypes.map((type, idx) => (
                   <div
                     key={type.value}
-                    draggable
-                    onDragStart={e => {
-                      e.dataTransfer.setData('text/plain', type.value);
-                    }}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => {
-                      const fromIdx = Number(e.dataTransfer.getData('text/plain'));
-                      if (fromIdx === contentTypes.indexOf(type)) return;
-                      setContentTypes(prev => {
-                        const arr = [...prev];
-                        const [moved] = arr.splice(fromIdx, 1);
-                        arr.splice(contentTypes.indexOf(type), 0, moved);
-                        return arr;
-                      });
-                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
+                      gap: '0.75rem',
+                      cursor: 'grab',
                       background: '#f3f4f6',
-                      borderRadius: '20px',
-                      padding: '0.4rem 1rem',
-                      fontSize: '0.95rem',
-                      fontWeight: 500,
+                      borderRadius: 12,
                       border: '1px solid #d1d5db',
+                      padding: '0.4rem 1.2rem',
+                      marginBottom: 6,
+                      minHeight: 44,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('fromIdx', String(idx));
+                    }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                      const fromIdx = Number(e.dataTransfer.getData('fromIdx'));
+                      if (fromIdx === idx) return;
+                      setContentTypes(prev => {
+                        const arr = [...prev];
+                        const [moved] = arr.splice(fromIdx, 1);
+                        arr.splice(idx, 0, moved);
+                        return arr;
+                      });
+                    }}
+                  >
+                    {/* 拖曳 icon */}
+                    <span style={{
+                      fontSize: '1.3rem',
+                      color: '#9ca3af',
+                      marginRight: 12,
                       cursor: 'grab',
                       userSelect: 'none',
-                    }}
-                    title="可拖曳排序"
-                  >
-                    <span>{type.label}</span>
-                    {contentTypes.length > 1 && (
-                      <button
-                        onClick={() => setContentTypes(prev => prev.filter(t => t !== type))}
-                        style={{
-                          marginLeft: '0.5rem',
-                          background: 'none',
-                          border: 'none',
-                          color: '#b91c1c',
-                          fontWeight: 700,
-                          fontSize: '1.1rem',
-                          cursor: 'pointer',
-                          lineHeight: 1,
-                        }}
-                        title="刪除"
-                        type="button"
-                      >✖</button>
-                    )}
+                      display: 'flex',
+                      alignItems: 'center',
+                    }} title="拖曳排序">
+                      ≡
+                    </span>
+                    {/* 內容型別名稱 */}
+                    <span style={{
+                      fontWeight: 700,
+                      fontSize: '1.1rem',
+                      color: '#22223b',
+                      flex: 1,
+                      letterSpacing: 1,
+                    }}>
+                      {type.label}
+                    </span>
+                    {/* 刪除按鈕 */}
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setContentTypes(cts => cts.filter((_, i) => i !== idx));
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#b91c1c',
+                        fontSize: '1.25rem',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        marginLeft: 8,
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                      title="刪除"
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
-                {/* 新增型別按鈕（獨立一行） */}
-                <button
-                  onClick={() => {
-                    const builtins = [
-                      { label: "講義", value: "lecture" },
-                      { label: "練習題", value: "quiz" },
-                      { label: "影片", value: "video" },
-                      { label: "討論", value: "discussion" },
-                    ];
-                    const canAdd = builtins.filter(b => !contentTypes.some(t => t.value === b.value));
-                    if (canAdd.length === 0) return;
-                    setContentTypes(prev => [...prev, canAdd[0]]);
-                  }}
-                  style={{
-                    background: '#2563eb',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '2rem',
-                    height: '2rem',
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: '0.5rem',
-                  }}
-                  title="新增內容型別"
-                  type="button"
-                  disabled={contentTypes.length >= 4}
-                >＋</button>
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
-                拖曳可排序，點擊 <span style={{ color: '#b91c1c' }}>✖</span> 可刪除，點 <b>＋</b> 可新增（最多 4 種）
+              {/* 新增內容型別 label */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                {[
+                  { label: "講義", value: "lecture" },
+                  { label: "影片", value: "video" },
+                  { label: "練習題", value: "quiz" },
+                  { label: "討論", value: "discussion" },
+                ]
+                  .filter(t => !contentTypes.some(ct => ct.value === t.value))
+                  .map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setContentTypes(cts => [...cts, t])}
+                      style={{
+                        background: '#e0e7ff',
+                        color: '#2563eb',
+                        border: '1px solid #2563eb',
+                        borderRadius: 20,
+                        padding: '0.4rem 1.2rem',
+                        fontSize: '1.05rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        transition: 'background 0.2s, color 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title={`新增${t.label}`}
+                      onMouseOver={e => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
+                        (e.currentTarget as HTMLButtonElement).style.color = 'white';
+                      }}
+                      onMouseOut={e => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#e0e7ff';
+                        (e.currentTarget as HTMLButtonElement).style.color = '#2563eb';
+                      }}
+                    >
+                      {t.label}
+                      <span style={{ color: '#b91c1c', marginLeft: 2, fontWeight: 700 }}>＋</span>
+                    </button>
+                  ))}
               </div>
             </div>
           )}
