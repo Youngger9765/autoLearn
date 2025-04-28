@@ -1632,7 +1632,18 @@ export default function GenerateCourse() {
         <>
           {showAssistant && (
             <ChatAssistant
-              allContent={sections.map((s) => `${s.title}\n${s.content}`).join('\n\n')}
+              allContent={sections.map((s) => 
+                [
+                  `【章節】${s.title}`,
+                  `【講義】\n${s.content}`,
+                  s.videoUrl ? `【影片】\n${s.videoUrl}` : '',
+                  s.questions && s.questions.length > 0
+                    ? `【練習題】\n${s.questions.map((q, i) => 
+                        `${i + 1}. ${q.question_text}\n選項：${q.options.join(' / ')}\n答案：${q.answer}${q.hint ? `\n提示：${q.hint}` : ''}`
+                      ).join('\n\n')}`
+                    : ''
+                ].filter(Boolean).join('\n\n')
+              ).join('\n\n=====\n\n')}
               targetAudience={targetAudience.join(',')}
               onClose={() => setShowAssistant(false)}
             />

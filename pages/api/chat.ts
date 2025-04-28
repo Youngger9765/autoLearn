@@ -21,34 +21,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     let thread_id = threadId;
-
-    // 1. 若沒有 thread id，建立新 thread 並回傳
-    if (!thread_id) {
-      const thread = await openai.beta.threads.create({
-        messages: [
-          {
-            role: "user",
-            content: question,
-          },
-        ],
-      });
-      thread_id = thread.id;
-    } else {
-      // 有 thread id，直接新增訊息
-      await openai.beta.threads.messages.create(thread_id, {
-        role: "user",
-        content: question,
-      });
-    }
-
-    // 2. 執行 assistant
     let run;
+    // 先組合 audienceInstruction
     let audienceInstruction = "";
-
-    // 支援複選年級
     let audienceList: string[] = [];
     if (Array.isArray(targetAudience)) {
-      // 過濾掉 "other" 與空值
       audienceList = targetAudience.filter((a) => a && a !== "other");
       if (audienceList.length > 0) {
         audienceInstruction = `\n請注意，學生的背景是「${audienceList.join("、")} 年級」，請用適合他們的語氣和深度回答。`;
@@ -62,14 +39,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       audienceInstruction = `\n請注意，學生的背景是「一般使用者」，請用適合他們的語氣和深度回答。`;
     }
 
-    if (!threadId) {
-      // 第一次提問，傳 instructions
+    // 1. 若沒有 thread id，建立新 thread 並回傳
+    if (!thread_id) {
+      // 第一次提問，建立 thread，課程內容與問題合併為同一則 user message
+      const thread = await openai.beta.threads.create({
+        messages: [
+          {
+            role: "user",
+            content: `以下是本次課程的所有內容，請參考：\n\n${allContent}\n\n---\n\n我的問題：${question}`,
+          }
+        ]
+      });
+      thread_id = thread.id;
+
+      // run 指令只需要說明回答語言
       run = await openai.beta.threads.runs.create(thread_id, {
         assistant_id: ASSISTANT_ID,
-        instructions: `以下是本次課程的所有內容，請根據這些內容回答學生問題，請使用 zhTW 繁體中文回答，若內容不足請誠實說明：\n${allContent}${audienceInstruction}`,
       });
     } else {
-      // 之後提問，不傳 instructions
+      // 之後提問，先加 user message，再 run
+      await openai.beta.threads.messages.create(thread_id, {
+        role: "user",
+        content: question,
+      });
       run = await openai.beta.threads.runs.create(thread_id, {
         assistant_id: ASSISTANT_ID,
       });
