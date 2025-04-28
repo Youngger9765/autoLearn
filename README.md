@@ -121,9 +121,133 @@ OPENAI_API_KEY=你的_OPENAI_API_KEY
 - 送出後，該章節的討論題輸入區與所有按鈕將被鎖定（不可再修改或批改），並於章節標題右側顯示「討論✅」。
 - 若尚未送出，章節標題右側顯示「討論☐」。
 
+### 6.6 練習題歷程（Quiz History）記錄與應用
+
+- **記錄方式**：每當使用者在互動式練習題區塊作答並提交時，系統會將該題的題目、作答內容、正確與否、作答時間等資訊，依序記錄於 quizHistory 狀態（陣列）中。
+- **資料結構**：
+  ```typescript
+  type QuizHistoryItem = {
+    question: string;
+    answers: {
+      userAnswer: string;
+      correct: boolean;
+      timestamp: number;
+    }[];
+  };
+  ```
+- **前端傳遞**：quizHistory 狀態會隨每次 AI 助教提問一併傳遞給後端 API。
+- **後端應用**：當 AI 助教判斷意圖為 `ask_quiz` 時，僅會將 quizHistory 中「最近一次作答紀錄」帶入 context，讓 AI 回饋能根據用戶最新的作答狀況給出個人化建議。
+- **顯示方式**：使用者可隨時點擊右下角「做題歷程」按鈕，檢視所有作答紀錄，包含每題的答題狀態與時間。
+
 ---
 
-## 7. 參考資源
+## 7. AI 助教（Assistant）互動流程與設計說明
+
+### 7.1 Assistant 運作流程
+
+AI 助教（assistant）基於 OpenAI Assistant API，與使用者的互動採用「thread（對話串）」與「run（執行）」的設計。每次提問與回覆都會被記錄於 thread 之中，確保上下文連貫。
+
+#### 主要流程如下：
+
+1. **Thread 建立**
+   - 使用者第一次開啟 AI 助教並提問時，系統會建立一個新的 thread，並將課程所有內容（allContent）與第一個問題組合成一則 user message，作為 thread 的開頭。
+   - thread id 會回傳給前端，後續所有提問都會沿用同一個 thread id。
+
+2. **Assistant Instruction 設定**
+   - 在 thread 第一次建立時，會同時建立一個 run，run 會帶入 assistant 的 instruction。
+   - instruction 內容包含 AI 助教的角色、回答規範、溝通風格、重要限制（如：嚴禁直接給練習題答案）、以及根據目標年級（targetAudience）調整語氣與深度。
+   - instruction 只在 thread 第一次建立時設定，後續 run 不再重複設定。
+
+3. **後續提問（有 thread id）**
+   - 每次使用者提問時，系統會先進行「意圖分析」（intent analysis），判斷問題屬於哪一類（如：ask_quiz、ask_lecture、ask_video、ask_essay、greeting）。
+   - 根據意圖，整理對應的 context：
+     - `ask_quiz`：只帶入 quizHistory 的「最近一次做題紀錄」。
+     - `ask_lecture`、`ask_video`、`ask_essay`：帶入對應章節內容。
+     - `greeting`：帶入 targetAudience。
+     - 其他：context 為空。
+   - 組合 prompt 格式如下：
+     ```
+     [意圖] {intent}
+     [背景資料] {context}
+     [使用者問題] {question}
+     請根據意圖與背景資料，給出最合適的回覆。
+     ```
+   - 將此 prompt 以 user message 形式加入 thread。
+
+4. **Run 執行**
+   - 每次新 user message 加入 thread 後，會建立一個新的 run，觸發 assistant 回覆。
+   - run 會自動根據 thread 內容與 instruction 產生回應。
+
+5. **回覆取得**
+   - 系統會輪詢 run 狀態，直到 assistant 回覆完成。
+   - 只取最新一則 assistant 回覆，回傳給前端顯示。
+
+---
+
+### 7.2 課程內容（allContent）與 targetAudience 加入時機
+
+- **課程所有內容（allContent）**
+  - **只在 thread 第一次建立時**，合併進 user message，作為 AI 助教的知識基礎。
+  - 後續提問不再重複傳送 allContent，只根據意圖帶入必要 context（如 quizHistory、章節內容等）。
+
+- **targetAudience**
+  - **主要放在 run 的 instruction 裡**，讓 AI 助教根據學生背景調整語氣與深度。
+  - instruction 內容會根據 targetAudience 組合出「請注意，學生的背景是……」等描述。
+  - **greeting intent** 時，也會放進 context，讓 AI 助教能針對打招呼時給出適合的回應。
+
+---
+
+### 7.3 Assistant Instruction 範例
+
+```text
+你是一位課程 AI 助教。
+
+[核心職責]
+1. 利用上下文回答問題：每次提問都會附帶本次課程的所有內容（包含章節標題、講義、影片連結、練習題等），請根據這些最新的課程內容來回答學生的問題。
+2. 結合課程結構：你也會收到課程的章節與內容摘要，請善用這些資訊，並在回答時適當引用或建議學生回顧相關章節。
+3. 專注當前問題：優先針對學生當前的提問進行深入解答與討論。
+4. 引導自主學習：如果問題涉及其他章節或知識點，可以引導學生回顧課程內容或探索其他章節。
+5. 練習題輔導（嚴禁給答案）：如果學生提問與練習題相關，你的目標是引導他們思考、回顧相關知識點，**絕對禁止直接或間接提供答案或暗示答案**，鼓勵學生獨立解決問題。
+
+[練習題]
+- 根據課程內容，給予準確、相關的提示。
+- 如果學生正在進行練習，幫助他們理解題意並給予適當提示，但不直接給答案。
+- 如果學生回答了練習題，請根據他們的回答給予建設性回饋。
+- 如果學生要求練習題，但課程中沒有預設題目，請根據課程內容即時創建一題合適的練習題（可為選擇題或問答題），並在學生作答後給予詳細解釋。
+- 若學生多次嘗試仍無法正確作答，可適度提示，最後再給出正確答案並說明原因。
+
+[溝通風格]
+- 友善、耐心、鼓勵學生自主思考。
+- 使用清晰、簡潔的語言。
+- 適時使用 Markdown 格式化回答（如列表、粗體、程式碼區塊等）。
+
+[重要限制]
+- 嚴禁透露練習題答案或提供任何可能推導出答案的線索。
+- 回答必須基於提供的課程內容，避免編造不相關資訊。
+- 全程使用繁體中文（zh-TW）。
+- 根據學生背景調整語氣與深度。
+```
+
+---
+
+### 7.4 重要設計細節
+
+- **thread id**：每個使用者/課程 session 對應一個 thread，確保上下文連貫。
+- **run**：每次提問都會建立新的 run，觸發 assistant 回覆。
+- **instruction**：只在 thread 建立時設定，後續 run 沿用，不重複設定。
+- **context 精簡**：為避免 token 浪費，後續提問只帶入必要 context（如 quizHistory 最新紀錄），不再每次都傳送全部課程內容。
+- **回覆唯一性**：只回傳最新一則 assistant 回覆，避免訊息重複。
+
+---
+
+### 7.5 前後端互動時序圖（簡易）
+
+1. 使用者提問（第一次）→ 建立 thread + run（含 instruction，帶 allContent、targetAudience）→ assistant 回覆
+2. 使用者提問（後續）→ 意圖分析 → context 整理（根據 intent 帶入 quizHistory/章節內容/targetAudience）→ user message 加入 thread → run → assistant 回覆
+
+---
+
+## 8. 參考資源
 
 - [Next.js 官方文件](https://nextjs.org/docs)
 - [React 官方文件](https://react.dev/)
@@ -132,7 +256,7 @@ OPENAI_API_KEY=你的_OPENAI_API_KEY
 
 ---
 
-## 8. 注意事項
+## 9. 注意事項
 
 - 請勿將 `.env.local` 上傳至公開版本庫。
 - 若需擴充功能，請遵循現有 API 路由與資料格式設計。
@@ -140,7 +264,7 @@ OPENAI_API_KEY=你的_OPENAI_API_KEY
 
 ---
 
-## 9. MVP 學習體驗優化 TODO
+## 10. MVP 學習體驗優化 TODO
 
 - [ ] 課程產生流程流暢化與錯誤處理
 - [ ] 章節內容展開/收合與 Markdown 顯示優化
@@ -150,5 +274,23 @@ OPENAI_API_KEY=你的_OPENAI_API_KEY
 - [ ] 學習進度條與成就感設計
 - [ ] 用戶回饋機制
 - [ ] 講義內容區塊支援「滑鼠選取文字時浮現畫重點/取消重點工具列」功能（暫緩開發，待討論）
+
+---
+
+## 11. 近期更新紀錄
+
+### 2024-06-09
+
+- **AI 助教支援意圖分析（Intent Analysis）與 Context 精準整理**
+  - 後端 `/api/chat.ts` 先判斷使用者問題意圖（如 ask_quiz、ask_lecture、greeting 等），再根據意圖決定 context。
+- **練習題互動優化與用戶歷程整合**
+  - 若意圖為 `ask_quiz`，AI 助教 context 只會帶入「用戶最近一次做題歷程」，讓回饋更個人化、更精準。
+  - 前端 `quizHistory` 狀態已正確傳遞到 AI 助教，並同步型別定義，避免 any。
+- **TypeScript 型別強化**
+  - 移除 any，明確定義 `QuizHistoryItem` 型別，前後端一致。
+  - 修正 API 端 map 參數型別，解決 TS 報錯。
+- **修正 AI 助教回覆重複顯示的問題**
+  - 只顯示最新一則 assistant 回覆，不再串接所有歷史訊息。
+- 其他小幅優化與錯誤處理。
 
 ---
