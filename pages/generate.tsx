@@ -312,6 +312,7 @@ export default function GenerateCourse() {
   const [isBlockCollapsed, setIsBlockCollapsed] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [customSectionTitles, setCustomSectionTitles] = useState<string[]>(Array(numSections).fill(""));
+  const [showQuizHistory, setShowQuizHistory] = useState(false);
   const defaultContentTypes = [
     { label: "講義", value: "lecture" },
     { label: "影片", value: "video" },
@@ -856,6 +857,34 @@ export default function GenerateCourse() {
               onClick={() => {
                 if (!currentSelected) return;
                 setSubmitted(s => ({ ...s, [String(secIndex)]: currentSelected }));
+
+                // 新增：記錄做題歷程
+                setQuizHistory(his => {
+                  const idx = his.findIndex(h => h.question === question.question_text);
+                  const newAnswer = {
+                    userAnswer: currentSelected,
+                    correct: currentSelected === question.answer,
+                    timestamp: Date.now(),
+                  };
+                  if (idx !== -1) {
+                    // 已有該題，append 新作答
+                    const updated = [...his];
+                    updated[idx] = {
+                      ...updated[idx],
+                      answers: [...updated[idx].answers, newAnswer],
+                    };
+                    return updated;
+                  } else {
+                    // 新題目
+                    return [
+                      ...his,
+                      {
+                        question: question.question_text,
+                        answers: [newAnswer],
+                      }
+                    ];
+                  }
+                });
               }}
               disabled={!currentSelected || isCorrectAnswer}
               style={(!currentSelected || isCorrectAnswer) ? { ...submitButtonStyle, ...disabledActionButtonStyle } : submitButtonStyle}
@@ -916,6 +945,17 @@ export default function GenerateCourse() {
       </div>
     );
   };
+
+  // 做題歷程 state
+  type QuizHistoryItem = {
+    question: string;
+    answers: {
+      userAnswer: string;
+      correct: boolean;
+      timestamp: number;
+    }[];
+  };
+  const [quizHistory, setQuizHistory] = useState<QuizHistoryItem[]>([]);
 
   return (
     <div style={containerStyle}>
@@ -1631,22 +1671,26 @@ export default function GenerateCourse() {
       {sections.length > 0 && !isGenerating && (
         <>
           {showAssistant && (
-            <ChatAssistant
-              allContent={sections.map((s) => 
-                [
-                  `【章節】${s.title}`,
-                  `【講義】\n${s.content}`,
-                  s.videoUrl ? `【影片】\n${s.videoUrl}` : '',
-                  s.questions && s.questions.length > 0
-                    ? `【練習題】\n${s.questions.map((q, i) => 
-                        `${i + 1}. ${q.question_text}\n選項：${q.options.join(' / ')}\n答案：${q.answer}${q.hint ? `\n提示：${q.hint}` : ''}`
-                      ).join('\n\n')}`
-                    : ''
-                ].filter(Boolean).join('\n\n')
-              ).join('\n\n=====\n\n')}
-              targetAudience={targetAudience.join(',')}
-              onClose={() => setShowAssistant(false)}
-            />
+            <div style={{ zIndex: 300, position: 'fixed', inset: 0, pointerEvents: 'none' }}>
+              <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, right: 0 }}>
+                <ChatAssistant
+                  allContent={sections.map((s) => 
+                    [
+                      `【章節】${s.title}`,
+                      `【講義】\n${s.content}`,
+                      s.videoUrl ? `【影片】\n${s.videoUrl}` : '',
+                      s.questions && s.questions.length > 0
+                        ? `【練習題】\n${s.questions.map((q, i) => 
+                            `${i + 1}. ${q.question_text}\n選項：${q.options.join(' / ')}\n答案：${q.answer}${q.hint ? `\n提示：${q.hint}` : ''}`
+                          ).join('\n\n')}`
+                        : ''
+                    ].filter(Boolean).join('\n\n')
+                  ).join('\n\n=====\n\n')}
+                  targetAudience={targetAudience.join(',')}
+                  onClose={() => setShowAssistant(false)}
+                />
+              </div>
+            </div>
           )}
           {!showAssistant && (
             <button
@@ -1674,6 +1718,84 @@ export default function GenerateCourse() {
             >
               <span style={{ fontSize: '2.2rem' }}>🤖</span>
             </button>
+          )}
+
+          {/* 做題歷程 Icon（永遠顯示，不隨彈窗消失） */}
+          <button
+            onClick={() => setShowQuizHistory(true)}
+            style={{
+              position: 'fixed',
+              bottom: '2.5rem',
+              right: '7.5rem',
+              zIndex: 201, // 比彈窗高
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              backgroundColor: '#f59e42',
+              color: 'white',
+              border: 'none',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              cursor: 'pointer',
+              transition: 'background 0.2s, box-shadow 0.2s',
+            }}
+            title="做題歷程"
+          >
+            <span style={{ fontSize: '2.2rem' }}>📝</span>
+          </button>
+
+          {/* 歷程彈窗 */}
+          {showQuizHistory && (
+            <div style={{
+              position: 'fixed',
+              top: '10vh',
+              left: 0,
+              right: 0,
+              margin: '0 auto',
+              width: 400,
+              maxWidth: '90vw',
+              background: 'white',
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+              zIndex: 200,
+              padding: '1.5rem 1.2rem',
+            }}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                <h3 style={{margin: 0, fontSize: '1.2rem'}}>做題歷程</h3>
+                <button onClick={() => setShowQuizHistory(false)} style={{fontSize: 22, background: 'none', border: 'none', cursor: 'pointer'}}>✖️</button>
+              </div>
+              <div style={{maxHeight: '60vh', overflowY: 'auto'}}>
+                {quizHistory.length === 0 ? (
+                  <div style={{color: '#888', textAlign: 'center'}}>尚無做題紀錄</div>
+                ) : (
+                  quizHistory.map((h, i) => (
+                    <div key={i} style={{marginBottom: 24}}>
+                      <div style={{fontWeight: 600, marginBottom: 4, color: '#374151'}}>{h.question}</div>
+                      {(h.answers ?? []).slice().reverse().map((a, j) => (
+                        <div key={j} style={{
+                          borderLeft: `6px solid ${a.correct ? '#22c55e' : '#ef4444'}`,
+                          background: a.correct ? '#f0fdf4' : '#fef2f2',
+                          marginBottom: 8,
+                          padding: '0.6rem 1rem',
+                          borderRadius: 8,
+                        }}>
+                          <div style={{fontWeight: 600, marginBottom: 2}}>
+                            {a.correct ? '✅ 答對' : '❌ 答錯'}
+                            <span style={{fontSize: 12, color: '#888', marginLeft: 8}}>
+                              {new Date(a.timestamp).toLocaleString('zh-TW')}
+                            </span>
+                          </div>
+                          <div style={{fontSize: 14, color: '#555'}}>你的答案：{a.userAnswer}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </>
       )}
