@@ -348,6 +348,8 @@ export default function GenerateCourse() {
   const [discussionAnswers, setDiscussionAnswers] = useState<{ [sectionIdx: string]: string }>({});
   const [discussionFeedback, setDiscussionFeedback] = useState<{ [sectionIdx: string]: string }>({});
   const [discussionLoading, setDiscussionLoading] = useState<{ [sectionIdx: string]: boolean }>({});
+  // 在主元件 state 區塊加上
+  const [discussionSubmitted, setDiscussionSubmitted] = useState<{ [sectionIdx: string]: boolean }>({});
 
   // 分步產生主流程
   const handleGenerate = async () => {
@@ -1248,6 +1250,15 @@ export default function GenerateCourse() {
                         ）
                       </span>
                     )}
+                    {/* === 新增：申論題批改狀態 emoji與文字 === */}
+                    {contentTypes.some(t => t.value === "discussion") && (
+                      <span style={{ fontSize: '0.95rem', color: '#7c3aed', marginLeft: 12, fontWeight: 500, verticalAlign: 'middle', display: 'inline-flex', alignItems: 'center' }}>
+                        討論
+                        <span style={{ fontSize: '1.2rem', marginLeft: 4 }}>
+                          {discussionSubmitted[String(idx)] ? '✅' : '☐'}
+                        </span>
+                      </span>
+                    )}
                   </h3>
                   {/* 載入/錯誤指示 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
@@ -1431,7 +1442,7 @@ export default function GenerateCourse() {
                                   preview="live"
                                   textareaProps={{
                                     placeholder: "請在此輸入你的申論內容（支援 Markdown 排版）...",
-                                    disabled: discussionLoading[String(idx)],
+                                    disabled: discussionLoading[String(idx)] || discussionSubmitted[String(idx)],
                                   }}
                                 />
                               </div>
@@ -1442,7 +1453,6 @@ export default function GenerateCourse() {
                                 <button
                                   onClick={async () => {
                                     setDiscussionLoading(l => ({ ...l, [String(idx)]: true }));
-                                    setDiscussionFeedback(f => ({ ...f, [String(idx)]: "" }));
                                     try {
                                       const res = await fetch("/api/grade-essay", {
                                         method: "POST",
@@ -1463,7 +1473,8 @@ export default function GenerateCourse() {
                                   }}
                                   disabled={
                                     !discussionAnswers[String(idx)] ||
-                                    discussionLoading[String(idx)]
+                                    discussionLoading[String(idx)] ||
+                                    discussionSubmitted[String(idx)]
                                   }
                                   style={{
                                     backgroundColor: '#7c3aed',
@@ -1473,12 +1484,12 @@ export default function GenerateCourse() {
                                     padding: '0.5rem 1.25rem',
                                     fontSize: '0.95rem',
                                     fontWeight: 600,
-                                    cursor: discussionLoading[String(idx)] ? 'not-allowed' : 'pointer',
-                                    opacity: !discussionAnswers[String(idx)] ? 0.5 : 1,
+                                    cursor: (discussionLoading[String(idx)] || discussionSubmitted[String(idx)]) ? 'not-allowed' : 'pointer',
+                                    opacity: !discussionAnswers[String(idx)] || discussionSubmitted[String(idx)] ? 0.5 : 1,
                                     marginRight: '1rem'
                                   }}
                                 >
-                                  {discussionLoading[String(idx)] ? "批改中..." : "送出並批改"}
+                                  {discussionLoading[String(idx)] ? "批改中..." : "批改"}
                                 </button>
                               </div>
                               {/* 顯示 AI 批改建議（支援 markdown） */}
@@ -1496,6 +1507,31 @@ export default function GenerateCourse() {
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {discussionFeedback[String(idx)]}
                                   </ReactMarkdown>
+                                  {/* 送出按鈕 */}
+                                  {!discussionSubmitted[String(idx)] && (
+                                    <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                                      <button
+                                        onClick={() => setDiscussionSubmitted(s => ({ ...s, [String(idx)]: true }))}
+                                        style={{
+                                          backgroundColor: '#22c55e',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: 6,
+                                          padding: '0.5rem 1.25rem',
+                                          fontSize: '0.95rem',
+                                          fontWeight: 600,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        送出
+                                      </button>
+                                    </div>
+                                  )}
+                                  {discussionSubmitted[String(idx)] && (
+                                    <div style={{ marginTop: '1rem', color: '#16a34a', fontWeight: 600 }}>
+                                      已送出，恭喜完成本章討論！
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
