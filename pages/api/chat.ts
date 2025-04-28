@@ -84,17 +84,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 `,
       });
     } else {
-      // 之後提問，先加 user message，再 run
+      // 有 thread_id，進行意圖分析與 context 整理
+      // 1. 意圖分析
+      const intentPrompt = `
+你是一個AI助教，請根據以下使用者問題，判斷其意圖，並用一個簡短英文標籤回答（如: "ask_quiz", "ask_lecture", "ask_video", "ask_essay", "greeting"）：
+問題：${question}
+只回標籤，不要多餘說明。
+      `;
+      const intentResp = await openai.chat.completions.create({
+        model: 'gpt-4.1-mini',
+        messages: [{ role: 'user', content: intentPrompt }],
+        max_tokens: 10,
+        temperature: 0,
+      });
+      const intent = intentResp.choices[0].message.content?.trim() || "other";
+
+      // 2. context 整理
+      let context = '';
+      if (intent === 'ask_quiz') {
+        context = allContent.split('【練習題】')[1]?.split('====')[0] || '';
+      } else if (intent === 'ask_lecture') {
+        context = allContent.split('【講義】')[1]?.split('====')[0] || '';
+      } else if (intent === 'ask_video') {
+        context = allContent.split('【影片】')[1]?.split('====')[0] || '';
+      } else if (intent === 'ask_essay') {
+        context = allContent.split('【討論】')[1]?.split('====')[0] || '';
+      } else if (intent === 'greeting') {
+        context = `targetAudience: ${targetAudience}`;
+      } else {
+        context = "";
+      }
+
+      // 3. 組合 prompt
+      const finalPrompt = `
+[意圖] ${intent}
+[背景資料] ${context}
+[使用者問題] ${question}
+請根據意圖與背景資料，給出最合適的回覆。
+      `;
+
+      // 4. 加入 user message 到 thread
       await openai.beta.threads.messages.create(thread_id, {
         role: "user",
-        content: question,
+        content: finalPrompt,
       });
+      // 5. Assistant 回覆
       run = await openai.beta.threads.runs.create(thread_id, {
         assistant_id: ASSISTANT_ID,
       });
     }
 
-    // 3. 輪詢直到 assistant 回答完成
+    // 輪詢直到 assistant 回答完成
     let runStatus = run;
     while (runStatus.status !== "completed" && runStatus.status !== "failed") {
       await new Promise((r) => setTimeout(r, 1500));
@@ -105,14 +145,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "AI 助教回覆失敗" });
     }
 
-    // 4. 取得 assistant 回覆
+    // 取得 assistant 回覆
     const messages = await openai.beta.threads.messages.list(thread_id);
-    const answer = messages.data
-      .filter((msg) => msg.role === "assistant")
-      .map((msg) =>
-        (msg.content as Array<{ text: { value: string } }>).map((c) => c.text.value).join("\n")
-      )
-      .join("\n");
+    const assistantMessages = messages.data.filter((msg) => msg.role === "assistant");
+    const latestMsg = assistantMessages[0];
+    let answer = "";
+    if (latestMsg) {
+      answer = (latestMsg.content as Array<{ text: { value: string } }>).map((c) => c.text.value).join("\n");
+    }
 
     // 回傳 thread id，前端要存下來
     res.status(200).json({ answer, threadId: thread_id });
