@@ -90,7 +90,16 @@ function SkeletonBlock({ height = 24, width = "100%", style = {} }: { height?: n
 }
 
 // AI 助教元件 (使用內聯樣式)
-function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { allContent: string, targetAudience: string, quizHistory: any[], onClose?: () => void }) {
+type QuizHistoryItem = {
+  question: string;
+  answers: {
+    userAnswer: string;
+    correct: boolean;
+    timestamp: number;
+  }[];
+};
+
+function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { allContent: string, targetAudience: string, quizHistory: QuizHistoryItem[], onClose?: () => void }) {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -948,14 +957,6 @@ export default function GenerateCourse() {
   };
 
   // 做題歷程 state
-  type QuizHistoryItem = {
-    question: string;
-    answers: {
-      userAnswer: string;
-      correct: boolean;
-      timestamp: number;
-    }[];
-  };
   const [quizHistory, setQuizHistory] = useState<QuizHistoryItem[]>([]);
 
   return (

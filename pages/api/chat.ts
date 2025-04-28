@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (Array.isArray(quizHistory) && quizHistory.length > 0) {
           const item = quizHistory[quizHistory.length - 1];
           if (item) {
-            const answers = (item.answers || []).map(a =>
+            const answers = (item.answers || []).map((a: { userAnswer: string; correct: boolean; timestamp: number }) =>
               `  - ${a.correct ? '✅' : '❌'} ${new Date(a.timestamp).toLocaleString('zh-TW')} 答案：${a.userAnswer}`
             ).join('\n');
             quizHistoryText = `\n【最近一次做題紀錄】\n${item.question}\n${answers}`;
