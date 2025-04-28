@@ -1,4 +1,4 @@
-import { useState, Fragment, CSSProperties, useEffect } from 'react';
+import { useState, Fragment, CSSProperties, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
@@ -104,6 +104,12 @@ function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { a
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // 訊息更新時自動捲到最底
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -216,11 +222,8 @@ function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { a
         )}
       </div>
       <div style={messagesContainerStyle}>
-        {messages.length === 0 && !loading && (
-          <p style={{ fontSize: '0.875rem', color: '#6b7280', textAlign: 'center', marginTop: '1rem' }}>請輸入問題與我互動</p>
-        )}
-        {messages.map((msg, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '0.75rem' }}>
+        {messages.map((msg, idx) => (
+          <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '0.75rem' }}>
             <div
               style={{
                 padding: '0.5rem',
@@ -272,9 +275,10 @@ function ChatAssistant({ allContent, targetAudience, quizHistory, onClose }: { a
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
              <div style={{ padding: '0.5rem', borderRadius: '0.5rem', backgroundColor: '#f3f4f6', color: '#6b7280', fontSize: '0.875rem', fontStyle: 'italic' }}>
                思考中...
-      </div>
+             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
       <div style={inputAreaStyle}>
       <input
