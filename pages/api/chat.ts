@@ -111,10 +111,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const answers = (item.answers || []).map((a: { userAnswer: string; correct: boolean; timestamp: number }) =>
               `  - ${a.correct ? '✅' : '❌'} ${new Date(a.timestamp).toLocaleString('zh-TW')} 答案：${a.userAnswer}`
             ).join('\n');
-            quizHistoryText = `\n【最近一次做題紀錄】\n${item.question}\n${answers}`;
+            quizHistoryText = `【最近一次做題紀錄】\n${item.question}\n${answers}`;
           }
         }
-        context = quizHistoryText;
+        context = quizHistoryText + `\n\n 除非用戶在這一題做對，否則不要透露正確答案`;
       } else if (intent === 'ask_lecture') {
         context = allContent.split('【講義】')[1]?.split('====')[0] || '';
       } else if (intent === 'ask_video') {
