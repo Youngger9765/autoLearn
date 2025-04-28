@@ -959,7 +959,7 @@ export default function GenerateCourse() {
             />
             {/* 範例主題 label 按鈕 */}
             <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {["Python 入門", "數據分析基礎", "AI 概論", "國中數學", "英文文法", "理財素養"].map((ex, i) => (
+              {["Python 入門", "數據分析基礎", "AI 概論", "國中數學", "英文文法", "理財素養"].map((ex) => (
                 <button
                   key={ex}
                   type="button"
