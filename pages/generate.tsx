@@ -304,7 +304,7 @@ export default function GenerateCourse() {
   const [showHint, setShowHint] = useState<{ [sectionIdx: string]: boolean }>({});
   const [hint, setHint] = useState<{ [sectionIdx: string]: string | null }>({});
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
-  const [numSections, setNumSections] = useState(5);
+  const [numSections, setNumSections] = useState(3);
   const [targetAudience, setTargetAudience] = useState<string[]>([]);
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>(["multiple_choice"]);
   const [numQuestions, setNumQuestions] = useState(2);
