@@ -963,6 +963,72 @@ export default function GenerateCourse() {
   // 做題歷程 state
   const [quizHistory, setQuizHistory] = useState<QuizHistoryItem[]>([]);
 
+  // 匯入/匯出相關 state
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 匯出課程 JSON
+  const handleExport = () => {
+    const exportData = {
+      prompt,
+      numSections,
+      targetAudience,
+      customSectionTitles,
+      contentTypes,
+      numQuestions,
+      selectedQuestionTypes,
+      sections,
+      quizHistory,
+      discussionAnswers,
+      discussionFeedback,
+      discussionSubmitted,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ai-course-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 匯入課程 JSON
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = JSON.parse(evt.target?.result as string);
+        // 基本欄位檢查
+        if (!data.sections || !Array.isArray(data.sections)) {
+          alert("匯入失敗：檔案格式錯誤");
+          return;
+        }
+        setPrompt(data.prompt ?? "");
+        setNumSections(data.numSections ?? 3);
+        setTargetAudience(data.targetAudience ?? []);
+        setCustomSectionTitles(data.customSectionTitles ?? []);
+        setContentTypes(data.contentTypes ?? defaultContentTypes);
+        setNumQuestions(data.numQuestions ?? 2);
+        setSelectedQuestionTypes(data.selectedQuestionTypes ?? ["multiple_choice"]);
+        setSections(data.sections ?? []);
+        setQuizHistory(data.quizHistory ?? []);
+        setDiscussionAnswers(data.discussionAnswers ?? {});
+        setDiscussionFeedback(data.discussionFeedback ?? {});
+        setDiscussionSubmitted(data.discussionSubmitted ?? {});
+        setIsBlockCollapsed(true);
+        setError("");
+        setCompletedSteps(data.sections?.length ? data.sections.length * 3 + 1 : 0);
+        // 其他 state 可視需要補充
+      } catch {
+        alert("匯入失敗：檔案解析錯誤");
+      }
+    };
+    reader.readAsText(file);
+    // 清空 input 以便下次可重複選同一檔案
+    e.target.value = "";
+  };
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -1296,6 +1362,38 @@ export default function GenerateCourse() {
             >
               {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
             </button>
+          </div>
+
+          {/* 匯入課程按鈕區塊 */}
+          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                padding: '0.5rem 1.25rem',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }}
+              title="從 JSON 檔匯入課程"
+            >
+              匯入課程
+            </button>
+            <input
+              type="file"
+              accept="application/json"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleImport}
+            />
+            <span style={{ color: '#888', fontSize: '0.95rem' }}>
+              （可還原課程進度）
+            </span>
           </div>
         </div>
       )}
@@ -1670,141 +1768,166 @@ export default function GenerateCourse() {
               </div>
             );
           })}
-        </div>
-      )}
 
-      {/* AI 助教浮動按鈕與展開視窗 */}
-      {sections.length > 0 && !isGenerating && (
-        <>
-          {showAssistant && (
-            <div style={{ zIndex: 300, position: 'fixed', inset: 0, pointerEvents: 'none' }}>
-              <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, right: 0 }}>
-                <ChatAssistant
-                  allContent={sections.map((s) => 
-                    [
-                      `【章節】${s.title}`,
-                      `【講義】\n${s.content}`,
-                      s.videoUrl ? `【影片】\n${s.videoUrl}` : '',
-                      s.questions && s.questions.length > 0
-                        ? `【練習題】\n${s.questions.map((q, i) => 
-                            `${i + 1}. ${q.question_text}\n選項：${q.options.join(' / ')}\n答案：${q.answer}${q.hint ? `\n提示：${q.hint}` : ''}`
-                          ).join('\n\n')}`
-                        : ''
-                    ].filter(Boolean).join('\n\n')
-                  ).join('\n\n=====\n\n')}
-                  targetAudience={targetAudience.join(',')}
-                  quizHistory={quizHistory}
-                  onClose={() => setShowAssistant(false)}
-                />
-              </div>
-            </div>
-          )}
-          {!showAssistant && (
+          {/* 匯出課程按鈕區塊 */}
+          <div style={{ margin: '2.5rem 0 1.5rem 0', display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'flex-end' }}>
             <button
-              onClick={() => setShowAssistant(true)}
+              type="button"
+              onClick={handleExport}
               style={{
-                position: 'fixed',
-                bottom: '2.5rem',
-                right: '2.5rem',
-                zIndex: 100,
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                backgroundColor: '#2563eb',
+                background: '#f59e42',
                 color: 'white',
                 border: 'none',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '2rem',
+                borderRadius: 6,
+                padding: '0.5rem 1.25rem',
+                fontSize: '1rem',
+                fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'background 0.2s, box-shadow 0.2s',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               }}
-              title="展開 AI 助教"
+              title="匯出目前課程內容為 JSON 檔"
             >
-              <span style={{ fontSize: '2.2rem' }}>🤖</span>
+              匯出課程
             </button>
-          )}
+            <span style={{ color: '#888', fontSize: '0.95rem' }}>
+              （可備份課程進度）
+            </span>
+          </div>
 
-          {/* 做題歷程 Icon（永遠顯示，不隨彈窗消失） */}
-          <button
-            onClick={() => setShowQuizHistory(true)}
-            style={{
-              position: 'fixed',
-              bottom: '2.5rem',
-              right: '7.5rem',
-              zIndex: 201, // 比彈窗高
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              backgroundColor: '#f59e42',
-              color: 'white',
-              border: 'none',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2rem',
-              cursor: 'pointer',
-              transition: 'background 0.2s, box-shadow 0.2s',
-            }}
-            title="做題歷程"
-          >
-            <span style={{ fontSize: '2.2rem' }}>📝</span>
-          </button>
+          {/* AI 助教浮動按鈕與展開視窗 */}
+          {sections.length > 0 && !isGenerating && (
+            <>
+              {showAssistant && (
+                <div style={{ zIndex: 300, position: 'fixed', inset: 0, pointerEvents: 'none' }}>
+                  <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, right: 0 }}>
+                    <ChatAssistant
+                      allContent={sections.map((s) => 
+                        [
+                          `【章節】${s.title}`,
+                          `【講義】\n${s.content}`,
+                          s.videoUrl ? `【影片】\n${s.videoUrl}` : '',
+                          s.questions && s.questions.length > 0
+                            ? `【練習題】\n${s.questions.map((q, i) => 
+                                `${i + 1}. ${q.question_text}\n選項：${q.options.join(' / ')}\n答案：${q.answer}${q.hint ? `\n提示：${q.hint}` : ''}`
+                              ).join('\n\n')}`
+                            : ''
+                        ].filter(Boolean).join('\n\n')
+                      ).join('\n\n=====\n\n')}
+                      targetAudience={targetAudience.join(',')}
+                      quizHistory={quizHistory}
+                      onClose={() => setShowAssistant(false)}
+                    />
+                  </div>
+                </div>
+              )}
+              {!showAssistant && (
+                <button
+                  onClick={() => setShowAssistant(true)}
+                  style={{
+                    position: 'fixed',
+                    bottom: '2.5rem',
+                    right: '2.5rem',
+                    zIndex: 100,
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '2rem',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s, box-shadow 0.2s',
+                  }}
+                  title="展開 AI 助教"
+                >
+                  <span style={{ fontSize: '2.2rem' }}>🤖</span>
+                </button>
+              )}
 
-          {/* 歷程彈窗 */}
-          {showQuizHistory && (
-            <div style={{
-              position: 'fixed',
-              top: '10vh',
-              left: 0,
-              right: 0,
-              margin: '0 auto',
-              width: 400,
-              maxWidth: '90vw',
-              background: 'white',
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-              zIndex: 200,
-              padding: '1.5rem 1.2rem',
-            }}>
-              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
-                <h3 style={{margin: 0, fontSize: '1.2rem'}}>做題歷程</h3>
-                <button onClick={() => setShowQuizHistory(false)} style={{fontSize: 22, background: 'none', border: 'none', cursor: 'pointer'}}>✖️</button>
-              </div>
-              <div style={{maxHeight: '60vh', overflowY: 'auto'}}>
-                {quizHistory.length === 0 ? (
-                  <div style={{color: '#888', textAlign: 'center'}}>尚無做題紀錄</div>
-                ) : (
-                  quizHistory.map((h, i) => (
-                    <div key={i} style={{marginBottom: 24}}>
-                      <div style={{fontWeight: 600, marginBottom: 4, color: '#374151'}}>{h.question}</div>
-                      {(h.answers ?? []).slice().reverse().map((a, j) => (
-                        <div key={j} style={{
-                          borderLeft: `6px solid ${a.correct ? '#22c55e' : '#ef4444'}`,
-                          background: a.correct ? '#f0fdf4' : '#fef2f2',
-                          marginBottom: 8,
-                          padding: '0.6rem 1rem',
-                          borderRadius: 8,
-                        }}>
-                          <div style={{fontWeight: 600, marginBottom: 2}}>
-                            {a.correct ? '✅ 答對' : '❌ 答錯'}
-                            <span style={{fontSize: 12, color: '#888', marginLeft: 8}}>
-                              {new Date(a.timestamp).toLocaleString('zh-TW')}
-                            </span>
-                          </div>
-                          <div style={{fontSize: 14, color: '#555'}}>你的答案：{a.userAnswer}</div>
+              {/* 做題歷程 Icon（永遠顯示，不隨彈窗消失） */}
+              <button
+                onClick={() => setShowQuizHistory(true)}
+                style={{
+                  position: 'fixed',
+                  bottom: '2.5rem',
+                  right: '7.5rem',
+                  zIndex: 201, // 比彈窗高
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f59e42',
+                  color: 'white',
+                  border: 'none',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2rem',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s, box-shadow 0.2s',
+                }}
+                title="做題歷程"
+              >
+                <span style={{ fontSize: '2.2rem' }}>📝</span>
+              </button>
+
+              {/* 歷程彈窗 */}
+              {showQuizHistory && (
+                <div style={{
+                  position: 'fixed',
+                  top: '10vh',
+                  left: 0,
+                  right: 0,
+                  margin: '0 auto',
+                  width: 400,
+                  maxWidth: '90vw',
+                  background: 'white',
+                  borderRadius: 12,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                  zIndex: 200,
+                  padding: '1.5rem 1.2rem',
+                }}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                    <h3 style={{margin: 0, fontSize: '1.2rem'}}>做題歷程</h3>
+                    <button onClick={() => setShowQuizHistory(false)} style={{fontSize: 22, background: 'none', border: 'none', cursor: 'pointer'}}>✖️</button>
+                  </div>
+                  <div style={{maxHeight: '60vh', overflowY: 'auto'}}>
+                    {quizHistory.length === 0 ? (
+                      <div style={{color: '#888', textAlign: 'center'}}>尚無做題紀錄</div>
+                    ) : (
+                      quizHistory.map((h, i) => (
+                        <div key={i} style={{marginBottom: 24}}>
+                          <div style={{fontWeight: 600, marginBottom: 4, color: '#374151'}}>{h.question}</div>
+                          {(h.answers ?? []).slice().reverse().map((a, j) => (
+                            <div key={j} style={{
+                              borderLeft: `6px solid ${a.correct ? '#22c55e' : '#ef4444'}`,
+                              background: a.correct ? '#f0fdf4' : '#fef2f2',
+                              marginBottom: 8,
+                              padding: '0.6rem 1rem',
+                              borderRadius: 8,
+                            }}>
+                              <div style={{fontWeight: 600, marginBottom: 2}}>
+                                {a.correct ? '✅ 答對' : '❌ 答錯'}
+                                <span style={{fontSize: 12, color: '#888', marginLeft: 8}}>
+                                  {new Date(a.timestamp).toLocaleString('zh-TW')}
+                                </span>
+                              </div>
+                              <div style={{fontSize: 14, color: '#555'}}>你的答案：{a.userAnswer}</div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </>
+        </div>
       )}
 
       {/* 全域樣式和動畫 */}
