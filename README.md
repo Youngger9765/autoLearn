@@ -406,3 +406,13 @@ AI 助教（assistant）基於 OpenAI Assistant API，與使用者的互動採�
 - 其他小幅優化與錯誤處理。
 
 ---
+
+### Mock Data 移除與真實資料串接 TODO
+
+- [ ] 影片產生 API（`/api/generate-video.ts`）目前僅回傳 mock 圖片 `/mock-video.png`，**尚未串接 YouTube Data API 或真實影片來源**。  
+  - 待辦：改為根據章節內容自動搜尋/產生 YouTube 影片連結，或支援自訂影片上傳/嵌入。
+
+- [ ] 課程大綱卡片 Banner（outline banner）目前僅使用預設靜態圖片（mock），**尚未支援自訂上傳或真實圖片來源**。  
+  - 待辦：改為可上傳自訂圖片，或支援從外部來源取得 Banner。
+
+---
