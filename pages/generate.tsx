@@ -1077,6 +1077,23 @@ export default function GenerateCourse() {
     }
   };
 
+  // 新增：大綱 textarea 的 ref
+  const outlineContentRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 自動調整 textarea 高度
+  const autoResizeOutlineContent = () => {
+    const el = outlineContentRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight + 2) + 'px';
+    }
+  };
+
+  // 當 outlineContent 變動時自動調整高度
+  useEffect(() => {
+    autoResizeOutlineContent();
+  }, [outlineContent]);
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -1765,8 +1782,13 @@ export default function GenerateCourse() {
                 </div>
               )}
               <textarea
+                ref={outlineContentRef} // 新增 ref
                 value={outlineContent}
-                onChange={e => setOutlineContent(e.target.value)}
+                onChange={e => {
+                  setOutlineContent(e.target.value);
+                  // 立即自動調整高度
+                  setTimeout(autoResizeOutlineContent, 0);
+                }}
                 placeholder="可自行輸入課程大綱，留空則由 AI 產生"
                 style={{
                   width: '100%',
@@ -1775,8 +1797,8 @@ export default function GenerateCourse() {
                   borderRadius: 6,
                   padding: '0.75rem 1rem',
                   fontSize: '1rem',
-                  resize: 'vertical',
-                  boxSizing: 'border-box' // <--- 新增這行
+                  resize: 'none', // 不允許手動調整
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
