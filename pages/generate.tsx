@@ -1048,6 +1048,35 @@ export default function GenerateCourse() {
   const [highlightPrompt, setHighlightPrompt] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
+  // 1. 新增 state
+  const [singleTitleLoadingIdx, setSingleTitleLoadingIdx] = useState<number | null>(null);
+
+  // 在元件內部
+  const handleSingleSectionTitleAI = async (idx: number) => {
+    if (!prompt.trim()) {
+      setHighlightPrompt(true);
+      promptRef.current?.focus();
+      setTimeout(() => setHighlightPrompt(false), 1500);
+      return;
+    }
+    setSingleTitleLoadingIdx(idx);
+    const result = await fetchWithRetry<{ outline: string[] }>("/api/generate-outline", {
+      prompt,
+      numSections: 1,
+      targetAudience,
+      customSectionTitles: [],
+      singleSectionIndex: idx,
+    });
+    setSingleTitleLoadingIdx(null);
+    if (result.data?.outline?.[0]) {
+      setCustomSectionTitles(titles => {
+        const arr = [...titles];
+        arr[idx] = result.data!.outline[0];
+        return arr;
+      });
+    }
+  };
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -1297,16 +1326,88 @@ export default function GenerateCourse() {
                 </span>
               </div>
               {Array.from({ length: numSections }).map((_, idx) => (
-                <div key={idx} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ color: '#6b7280', minWidth: 32 }}>{idx + 1}.</span>
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                   <input
                     type="text"
                     value={customSectionTitles[idx] || ""}
-                    onChange={e => handleCustomSectionTitleChange(idx, e.target.value)}
-                    placeholder={`第 ${idx + 1} 章名稱（留空則由 AI 產生）`}
-                    style={{ ...inputStyle, width: '70%' }}
-                    disabled={isGenerating}
+                    onChange={e => {
+                      const arr = [...customSectionTitles];
+                      arr[idx] = e.target.value;
+                      setCustomSectionTitles(arr);
+                    }}
+                    placeholder={`第 ${idx + 1} 章節標題`}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      fontSize: '1rem',
+                      marginRight: 8
+                    }}
                   />
+                  <span
+                    title={!prompt.trim() ? "請先輸入主題" : "AI 產生此章節標題"}
+                    style={{ display: 'inline-flex' }}
+                    onClick={e => {
+                      if (!prompt.trim()) {
+                        setHighlightPrompt(true);
+                        promptRef.current?.focus();
+                        setTimeout(() => setHighlightPrompt(false), 1500);
+                        e.preventDefault();
+                        e.stopPropagation();
+                      } else if (singleTitleLoadingIdx === null) {
+                        handleSingleSectionTitleAI(idx);
+                      }
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-disabled={singleTitleLoadingIdx !== null || !prompt.trim()}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: singleTitleLoadingIdx !== null || !prompt.trim() ? 'not-allowed' : 'pointer',
+                        fontSize: 18,
+                        color: singleTitleLoadingIdx !== null && singleTitleLoadingIdx !== idx ? '#d1d5db' : '#6366f1',
+                        position: 'relative'
+                      }}
+                    >
+                      {singleTitleLoadingIdx === idx
+                        ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 18,
+                              height: 18,
+                              verticalAlign: 'middle'
+                            }}
+                          >
+                            <svg
+                              style={{ animation: 'spin 1s linear infinite' }}
+                              width="18"
+                              height="18"
+                              viewBox="0 0 50 50"
+                            >
+                              <circle
+                                cx="25"
+                                cy="25"
+                                r="20"
+                                fill="none"
+                                stroke="#6366f1"
+                                strokeWidth="5"
+                                strokeDasharray="31.4 31.4"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                            <style>
+                              {`@keyframes spin { 100% { transform: rotate(360deg); } }`}
+                            </style>
+                          </span>
+                        )
+                        : <span role="img" aria-label="magic">🪄</span>
+                      }
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>
