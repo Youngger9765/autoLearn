@@ -1094,6 +1094,16 @@ export default function GenerateCourse() {
   const [editingContentIdx, setEditingContentIdx] = useState<number | null>(null);
   const [editingContentValue, setEditingContentValue] = useState<string>("");
 
+  function isYoutubeUrl(url: string) {
+    return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(url);
+  }
+  function getYoutubeEmbedUrl(url: string) {
+    // 支援 youtu.be/xxxx 或 youtube.com/watch?v=xxxx
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{11})/);
+    const id = match ? match[1] : null;
+    return id ? `https://www.youtube.com/embed/${id}` : url;
+  }
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -2149,27 +2159,55 @@ export default function GenerateCourse() {
                                     <div key={type.value} style={{ marginBottom: '1.5rem' }}>
                                       {/* 影片內容 */}
                                       {sec.videoUrl ? (
-                                        <div
-                                          style={{
-                                            width: '100%',
-                                            maxWidth: 640,
-                                            aspectRatio: '16/9',
-                                            background: '#ccc',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            margin: '0 auto',
-                                            position: 'relative',
-                                          }}
-                                        >
-                                          <Image
-                                            src={sec.videoUrl}
-                                            alt="影片示意圖"
-                                            fill
-                                            style={{
-                                              objectFit: 'cover'
-                                            }}
-                                          />
-                                        </div>
+                                        isYoutubeUrl(sec.videoUrl)
+                                          ? (
+                                            <div
+                                              style={{
+                                                width: '100%',
+                                                maxWidth: 640,
+                                                aspectRatio: '16/9',
+                                                background: '#ccc',
+                                                overflow: 'hidden',
+                                                borderRadius: 8,
+                                                margin: '0 auto',
+                                                position: 'relative',
+                                              }}
+                                            >
+                                              <iframe
+                                                width="100%"
+                                                height="100%"
+                                                src={getYoutubeEmbedUrl(sec.videoUrl)}
+                                                title="YouTube 影片"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                                style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                              />
+                                            </div>
+                                          )
+                                          : (
+                                            <div
+                                              style={{
+                                                width: '100%',
+                                                maxWidth: 640,
+                                                aspectRatio: '16/9',
+                                                background: '#ccc',
+                                                overflow: 'hidden',
+                                                borderRadius: 8,
+                                                margin: '0 auto',
+                                                position: 'relative',
+                                              }}
+                                            >
+                                              <Image
+                                                src={sec.videoUrl}
+                                                alt="影片示意圖"
+                                                fill
+                                                style={{
+                                                  objectFit: 'cover'
+                                                }}
+                                              />
+                                            </div>
+                                          )
                                       ) : (
                                         <div style={videoContainerStyle}>
                                           <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
@@ -2317,27 +2355,55 @@ export default function GenerateCourse() {
                                 <div key={type.value} style={{ marginBottom: '1.5rem' }}>
                                   {/* 影片內容 */}
                                   {sec.videoUrl ? (
-                                    <div
-                                      style={{
-                                        width: '100%',
-                                        maxWidth: 640,
-                                        aspectRatio: '16/9',
-                                        background: '#ccc',
-                                        overflow: 'hidden',
-                                        borderRadius: 8,
-                                        margin: '0 auto',
-                                        position: 'relative',
-                                      }}
-                                    >
-                                      <Image
-                                        src={sec.videoUrl}
-                                        alt="影片示意圖"
-                                        fill
-                                        style={{
-                                          objectFit: 'cover'
-                                        }}
-                                      />
-                                    </div>
+                                    isYoutubeUrl(sec.videoUrl)
+                                      ? (
+                                        <div
+                                          style={{
+                                            width: '100%',
+                                            maxWidth: 640,
+                                            aspectRatio: '16/9',
+                                            background: '#ccc',
+                                            overflow: 'hidden',
+                                            borderRadius: 8,
+                                            margin: '0 auto',
+                                            position: 'relative',
+                                          }}
+                                        >
+                                          <iframe
+                                            width="100%"
+                                            height="100%"
+                                            src={getYoutubeEmbedUrl(sec.videoUrl)}
+                                            title="YouTube 影片"
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                          />
+                                        </div>
+                                      )
+                                      : (
+                                        <div
+                                          style={{
+                                            width: '100%',
+                                            maxWidth: 640,
+                                            aspectRatio: '16/9',
+                                            background: '#ccc',
+                                            overflow: 'hidden',
+                                            borderRadius: 8,
+                                            margin: '0 auto',
+                                            position: 'relative',
+                                          }}
+                                        >
+                                          <Image
+                                            src={sec.videoUrl}
+                                            alt="影片示意圖"
+                                            fill
+                                            style={{
+                                              objectFit: 'cover'
+                                            }}
+                                          />
+                                        </div>
+                                      )
                                   ) : (
                                     <div style={videoContainerStyle}>
                                       <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
