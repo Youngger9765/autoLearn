@@ -410,6 +410,7 @@ export default function GenerateCourse() {
         numSections,
         targetAudience,
         customSectionTitles: customSectionTitles.map(t => t.trim()),
+        outlineContent, // 新增
       });
 
       if (outlineResult.error) {
@@ -503,7 +504,7 @@ export default function GenerateCourse() {
       setLoadingStep(null);
       setCompletedSteps(totalSteps);
       setIsGenerating(false);
-      setIsBlockCollapsed(true);
+      setIsBlockCollapsed(true); // 新增：自動收合設定
     // 注意：這裡的 try...catch 仍然捕捉 handleGenerate 函數內 *其他* 可能的同步錯誤
     // 但 fetchWithRetry 本身的錯誤已經在內部處理並回傳了
     } catch (err) {
@@ -981,6 +982,9 @@ export default function GenerateCourse() {
       discussionAnswers,
       discussionFeedback,
       discussionSubmitted,
+      courseBanner,      // 新增：匯出 Banner
+      outlineDocs,       // 新增：匯出說明文件
+      outlineContent,    // 新增：匯出大綱內容
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1016,6 +1020,9 @@ export default function GenerateCourse() {
         setDiscussionAnswers(data.discussionAnswers ?? {});
         setDiscussionFeedback(data.discussionFeedback ?? {});
         setDiscussionSubmitted(data.discussionSubmitted ?? {});
+        setCourseBanner(data.courseBanner ?? "https://placehold.co/600x200?text=Course+Banner"); // 新增：還原 Banner
+        setOutlineDocs(data.outlineDocs ?? [""]); // 新增：還原說明文件
+        setOutlineContent(data.outlineContent ?? ""); // 新增：還原大綱內容
         setIsBlockCollapsed(true);
         setError("");
         setCompletedSteps(data.sections?.length ? data.sections.length * 3 + 1 : 0);
@@ -1028,6 +1035,18 @@ export default function GenerateCourse() {
     // 清空 input 以便下次可重複選同一檔案
     e.target.value = "";
   };
+
+  // ...其他 state
+  const [courseBanner, setCourseBanner] = useState<string>("https://placehold.co/600x200?text=Course+Banner");
+  const [outlineDocs, setOutlineDocs] = useState<string[]>([""]);
+  const [outlineContent, setOutlineContent] = useState<string>("");
+
+  // 在元件 state 區塊，加入 outlineTitleLoading 狀態
+  const [outlineTitleLoading, setOutlineTitleLoading] = useState(false);
+
+  // 1. 新增 state 與 ref
+  const [highlightPrompt, setHighlightPrompt] = useState(false);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   return (
     <div style={containerStyle}>
@@ -1063,11 +1082,44 @@ export default function GenerateCourse() {
       {/* 課程輸入區（可收合） */}
       {!isBlockCollapsed && (
         <div style={cardStyle}>
+          {/* === 匯入課程按鈕區塊（最上方） === */}
+          <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                padding: '0.5rem 1.25rem',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }}
+              title="從 JSON 檔匯入課程"
+            >
+              匯入課程
+            </button>
+            <input
+              type="file"
+              accept="application/json"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleImport}
+            />
+            <span style={{ color: '#888', fontSize: '0.95rem' }}>
+              （可還原課程進度）
+            </span>
+          </div>
+
           {/* group0: 主題設定 */}
           <div style={{ marginBottom: '1.5rem' }}>
             <label htmlFor="prompt" style={inputLabelStyle}>課程主題或敘述</label>
             <textarea
               id="prompt"
+              ref={promptRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="請輸入你想學習的主題或需求描述..."
@@ -1079,7 +1131,10 @@ export default function GenerateCourse() {
                 fontFamily: 'inherit',
                 fontSize: '1.05rem',
                 boxSizing: 'border-box',
-                padding: '1.25rem 1.5rem', // 上下 1.25rem，左右 1.5rem
+                padding: '1.25rem 1.5rem',
+                border: highlightPrompt ? '2.5px solid #dc2626' : (inputStyle.border || '1px solid #d1d5db'),
+                boxShadow: highlightPrompt ? '0 0 0 3px #fecaca' : undefined,
+                transition: 'border 0.2s, box-shadow 0.2s'
               }}
               disabled={isGenerating}
             />
@@ -1156,7 +1211,91 @@ export default function GenerateCourse() {
             />
             {/* 客製化章節標題 */}
             <div style={{ marginTop: '1rem' }}>
-              <label style={{ ...inputLabelStyle, marginBottom: 0 }}>自訂章節名稱（可選填）</label>
+              <div style={{ display: 'flex', alignItems: 'center', fontWeight: 600, marginBottom: 8 }}>
+                自訂章節名稱（可選填）
+                <span
+                  title={!prompt.trim() ? "請先輸入主題" : "AI 產生章節標題"}
+                  style={{ display: 'inline-flex' }}
+                  onClick={e => {
+                    if (!prompt.trim()) {
+                      setHighlightPrompt(true);
+                      promptRef.current?.focus();
+                      setTimeout(() => setHighlightPrompt(false), 1500);
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!prompt.trim()) return;
+                      setOutlineTitleLoading(true);
+                      const result = await fetchWithRetry<{ outline: string[] }>("/api/generate-outline", {
+                        prompt,
+                        numSections,
+                        targetAudience,
+                        customSectionTitles: [],
+                      });
+                      setOutlineTitleLoading(false);
+                      if (result.data?.outline) {
+                        setCustomSectionTitles(result.data.outline);
+                        setOutlineContent(result.data.outline.map(t => `• ${t}`).join('\n'));
+                      }
+                    }}
+                    style={{
+                      marginLeft: 8,
+                      background: 'none',
+                      border: 'none',
+                      cursor: isGenerating || outlineTitleLoading || !prompt.trim() ? 'not-allowed' : 'pointer',
+                      fontSize: 20,
+                      color: '#6366f1',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                    aria-disabled={isGenerating || outlineTitleLoading || !prompt.trim()}
+                  >
+                    {outlineTitleLoading
+                      ? (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 20,
+                            height: 20,
+                            verticalAlign: 'middle'
+                          }}
+                        >
+                          <svg
+                            style={{ animation: 'spin 1s linear infinite' }}
+                            width="20"
+                            height="20"
+                            viewBox="0 0 50 50"
+                          >
+                            <circle
+                              cx="25"
+                              cy="25"
+                              r="20"
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth="5"
+                              strokeDasharray="31.4 31.4"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <style>
+                            {`@keyframes spin { 100% { transform: rotate(360deg); } }`}
+                          </style>
+                        </span>
+                      )
+                      : (
+                        <span role="img" aria-label="magic">🪄</span>
+                      )
+                    }
+                  </button>
+                </span>
+              </div>
               {Array.from({ length: numSections }).map((_, idx) => (
                 <div key={idx} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ color: '#6b7280', minWidth: 32 }}>{idx + 1}.</span>
@@ -1351,49 +1490,208 @@ export default function GenerateCourse() {
             </>
           )}
 
-          {/* 產生按鈕 */}
+          {/* === 課程大綱卡片（只在設定區塊） === */}
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            padding: '2rem',
+            marginBottom: '2rem',
+            border: '1px solid #e5e7eb',
+            maxWidth: 800,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            boxSizing: 'border-box' // <--- 新增這行
+          }}>
+            {/* Banner 圖片 */}
+            <div style={{ marginBottom: 18, textAlign: 'center' }}>
+              <img
+                src={courseBanner}
+                alt="課程 Banner"
+                style={{ width: '100%', maxWidth: 600, borderRadius: 8, objectFit: 'cover', margin: '0 auto' }}
+              />
+            </div>
+            {/* 說明文件 URL 列表 */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>說明文件</div>
+              {outlineDocs.map((url, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={e => {
+                      const arr = [...outlineDocs];
+                      arr[idx] = e.target.value;
+                      setOutlineDocs(arr);
+                    }}
+                    placeholder="請輸入說明文件網址"
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      fontSize: '1rem',
+                      marginRight: 8
+                    }}
+                  />
+                  {outlineDocs.length > 1 && (
+                    <button
+                      onClick={() => setOutlineDocs(docs => docs.filter((_, i) => i !== idx))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#b91c1c',
+                        fontSize: 22,
+                        cursor: 'pointer'
+                      }}
+                      title="移除"
+                    >✖️</button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setOutlineDocs(docs => [...docs, ""])}
+                style={{
+                  background: '#e0e7ff',
+                  color: '#2563eb',
+                  border: '1px solid #2563eb',
+                  borderRadius: 20,
+                  padding: '0.3rem 1.2rem',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginTop: 6
+                }}
+              >＋ 新增說明文件</button>
+            </div>
+            {/* 大綱內容 */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', fontWeight: 600, marginBottom: 8 }}>
+                課程大綱
+                <span
+                  title={!prompt.trim() ? "請先輸入主題" : "AI 產生課程大綱"}
+                  style={{ display: 'inline-flex' }}
+                  onClick={e => {
+                    if (!prompt.trim()) {
+                      setHighlightPrompt(true);
+                      promptRef.current?.focus();
+                      setTimeout(() => setHighlightPrompt(false), 1500);
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!prompt.trim()) return;
+                      setLoadingStep("outline");
+                      const outlineResult = await fetchWithRetry<{ outline: string[]; outlineContent: string }>("/api/generate-outline", {
+                        prompt,
+                        numSections,
+                        targetAudience,
+                        customSectionTitles: customSectionTitles.map(t => t.trim()),
+                        outlineContent,
+                        outlineMagic: true,
+                      });
+                      setLoadingStep(null);
+                      if (outlineResult.data?.outlineContent) {
+                        setOutlineContent(outlineResult.data.outlineContent);
+                      } else if (outlineResult.data?.outline) {
+                        setOutlineContent(outlineResult.data.outline.join('\n'));
+                        setSections(outlineResult.data.outline.map(title => ({
+                          title, content: "", questions: [], videoUrl: "", error: undefined
+                        })));
+                      }
+                    }}
+                    style={{
+                      marginLeft: 8,
+                      background: 'none',
+                      border: 'none',
+                      cursor: isGenerating || loadingStep === "outline" || !prompt.trim() ? 'not-allowed' : 'pointer',
+                      fontSize: 22,
+                      color: '#6366f1',
+                      position: 'relative'
+                    }}
+                    aria-disabled={isGenerating || loadingStep === "outline" || !prompt.trim()}
+                  >
+                    {loadingStep === "outline"
+                      ? (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 22,
+                            height: 22,
+                            verticalAlign: 'middle'
+                          }}
+                        >
+                          <svg
+                            style={{ animation: 'spin 1s linear infinite' }}
+                            width="22"
+                            height="22"
+                            viewBox="0 0 50 50"
+                          >
+                            <circle
+                              cx="25"
+                              cy="25"
+                              r="20"
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth="5"
+                              strokeDasharray="31.4 31.4"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <style>
+                            {`@keyframes spin { 100% { transform: rotate(360deg); } }`}
+                          </style>
+                        </span>
+                      )
+                      : "🪄"
+                    }
+                  </button>
+                </span>
+              </div>
+              {/* 已完成大綱 parts（sections）置頂顯示 */}
+              {sections.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ color: '#2563eb', fontWeight: 500, marginBottom: 4 }}>已產生大綱：</div>
+                  <ol style={{ paddingLeft: 24, margin: 0 }}>
+                    {sections.map((s, i) => (
+                      <li key={i} style={{ marginBottom: 2 }}>{s.title}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              <textarea
+                value={outlineContent}
+                onChange={e => setOutlineContent(e.target.value)}
+                placeholder="可自行輸入課程大綱，留空則由 AI 產生"
+                style={{
+                  width: '100%',
+                  minHeight: 80,
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  padding: '0.75rem 1rem',
+                  fontSize: '1rem',
+                  resize: 'vertical',
+                  boxSizing: 'border-box' // <--- 新增這行
+                }}
+              />
+            </div>
+          </div>
+
+          {/* === 開始產生課程按鈕（大綱卡片下方） === */}
           <div style={{ marginTop: '1rem' }}>
             <button
               onClick={handleGenerate}
               disabled={isGenerating || !prompt.trim()}
               style={isGenerating || !prompt.trim() ? disabledButtonStyle : generateButtonStyle}
-              onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }} // Hover 效果
+              onMouseOver={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#16a34a'; }}
               onMouseOut={(e) => { if (!isGenerating && prompt.trim()) (e.target as HTMLButtonElement).style.backgroundColor = '#22c55e'; }}
             >
               {isGenerating ? `產生中 (${loadingStep})...` : '開始產生課程'}
             </button>
-          </div>
-
-          {/* 匯入課程按鈕區塊 */}
-          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                background: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: 6,
-                padding: '0.5rem 1.25rem',
-                fontSize: '1rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              }}
-              title="從 JSON 檔匯入課程"
-            >
-              匯入課程
-            </button>
-            <input
-              type="file"
-              accept="application/json"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImport}
-            />
-            <span style={{ color: '#888', fontSize: '0.95rem' }}>
-              （可還原課程進度）
-            </span>
           </div>
         </div>
       )}
@@ -1419,9 +1717,58 @@ export default function GenerateCourse() {
       {/* 課程內容 */}
       {sections.length > 0 && (
         <div style={{ marginTop: '2rem' }}>
-          {/* 課程標題 (可選) */}
-          {/* <h2 style={{ color: '#111827', borderBottom: '2px solid #9ca3af', paddingBottom: '0.5rem', marginBottom: '1rem' }}>{prompt}</h2> */}
-
+          {/* === 唯讀大綱卡片 === */}
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            padding: '2rem',
+            marginBottom: '2rem',
+            border: '1px solid #e5e7eb',
+            maxWidth: 800,
+            marginLeft: 'auto',
+            marginRight: 'auto'
+          }}>
+            {/* Banner 圖片 */}
+            <div style={{ marginBottom: 18, textAlign: 'center' }}>
+              <img
+                src={courseBanner}
+                alt="課程 Banner"
+                style={{ width: '100%', maxWidth: 600, borderRadius: 8, objectFit: 'cover', margin: '0 auto' }}
+              />
+            </div>
+            {/* 說明文件 URL 列表 */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>說明文件</div>
+              {outlineDocs.filter(Boolean).length === 0 && (
+                <div style={{ color: '#888', fontSize: 15 }}>（無）</div>
+              )}
+              {outlineDocs.filter(Boolean).map((url, idx) => (
+                <div key={idx} style={{ marginBottom: 6 }}>
+                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline', fontSize: 15 }}>
+                    {url}
+                  </a>
+                </div>
+              ))}
+            </div>
+            {/* 大綱內容 */}
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>課程大綱</div>
+              <div style={{
+                background: '#f3f4f6',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                padding: '0.75rem 1rem',
+                fontSize: '1rem',
+                minHeight: 60,
+                whiteSpace: 'pre-line',
+                color: '#22223b'
+              }}>
+                {outlineContent || <span style={{ color: '#888' }}>（無）</span>}
+              </div>
+            </div>
+          </div>
+          {/* === 原本的課程章節內容... === */}
           {sections.map((sec, idx) => {
             const isExpanded = expandedSections[String(idx)];
             // （這行刪除）
