@@ -351,14 +351,6 @@ export default function GenerateCourse() {
     });
   }, [numSections]);
 
-  const handleCustomSectionTitleChange = (idx: number, value: string) => {
-    setCustomSectionTitles((prev) => {
-      const arr = [...prev];
-      arr[idx] = value;
-      return arr;
-    });
-  };
-
   // 新增：討論題狀態
   const [discussionAnswers, setDiscussionAnswers] = useState<{ [sectionIdx: string]: string }>({});
   const [discussionFeedback, setDiscussionFeedback] = useState<{ [sectionIdx: string]: string }>({});
