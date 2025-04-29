@@ -1278,7 +1278,7 @@ export default function GenerateCourse() {
                       setOutlineTitleLoading(false);
                       if (result.data?.outline) {
                         setCustomSectionTitles(result.data.outline);
-                        setOutlineContent(result.data.outline.map(t => `• ${t}`).join('\n'));
+                        // 不再自動 setOutlineContent
                       }
                     }}
                     style={{
