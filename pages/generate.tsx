@@ -1090,6 +1090,10 @@ export default function GenerateCourse() {
   const [editingSectionIdx, setEditingSectionIdx] = useState<number | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState<string>("");
 
+  // ...其他 state
+  const [editingContentIdx, setEditingContentIdx] = useState<number | null>(null);
+  const [editingContentValue, setEditingContentValue] = useState<string>("");
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -2033,45 +2037,278 @@ export default function GenerateCourse() {
                               {type.value === "lecture" && (
                                 <div key={type.value} style={{ marginBottom: '1.5rem' }}>
                                   {/* 講義內容 */}
-                                  {sec.content ? (
-                                    <div style={{ ...lectureAreaStyle, color: "#374151", lineHeight: 1.7 }}>
-                                      <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                          code({ className, children, ...props }) {
-                                            const match = /language-(\w+)/.exec(className || '');
-                                            return match ? (
-                                              <SyntaxHighlighter
-                                                style={atomDark} language={match[1]} PreTag="div"
-                                                customStyle={{ borderRadius: '4px', fontSize: '0.85rem', margin: '0.5rem 0' }}
-                                                {...props}
-                                              >
-                                                {String(children).replace(/\n$/, '')}
-                                              </SyntaxHighlighter>
-                                            ) : (
-                                              <code style={{ backgroundColor: '#e5e7eb', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85rem', color: '#1f2937' }} className={className} {...props}>
-                                                {children}
-                                              </code>
-                                            );
-                                          },
-                                          p: (props) => <p style={{ marginBottom: '0.8rem' }} {...props} />,
-                                          ul: (props) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                                          ol: (props) => <ol style={{ paddingLeft: '1.5rem', marginBottom: '0.8rem' }} {...props} />,
-                                          li: (props) => <li style={{ marginBottom: '0.3rem' }} {...props} />,
-                                          table: (props) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #d1d5db' }} {...props} />,
-                                          thead: (props) => <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }} {...props} />,
-                                          th: (props) => <th style={{ border: '1px solid #d1d5db', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600 }} {...props} />,
-                                          td: (props) => <td style={{ border: '1px solid #e5e7eb', padding: '0.5rem 0.75rem' }} {...props} />,
-                                        }}
-                                      >
-                                        {sec.content}
-                                      </ReactMarkdown>
+                                  {contentTypes.some(t => t.value === "lecture") && (
+                                    <div style={{ position: 'relative', marginBottom: 24 }}>
+                                      {/* 編輯 icon（僅非編輯狀態下顯示） */}
+                                      {editingContentIdx !== idx && (
+                                        <button
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setEditingContentIdx(idx);
+                                            setEditingContentValue(sec.content || "");
+                                          }}
+                                          className="edit-pencil-btn"
+                                          style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            right: 8,
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            padding: 4,
+                                            borderRadius: '50%',
+                                          }}
+                                          title="編輯講義內容"
+                                        >
+                                          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                                            <path
+                                              d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                                              fill="#2563eb"
+                                            />
+                                          </svg>
+                                        </button>
+                                      )}
+
+                                      {/* 編輯狀態：Markdown 編輯器 */}
+                                      {editingContentIdx === idx ? (
+                                        <div>
+                                          <MDEditor
+                                            value={editingContentValue}
+                                            onChange={v => setEditingContentValue(v ?? "")}
+                                            height={220}
+                                          />
+                                          <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
+                                            <button
+                                              onClick={() => {
+                                                setSections(secs => {
+                                                  const arr = [...secs];
+                                                  arr[idx] = { ...arr[idx], content: editingContentValue };
+                                                  return arr;
+                                                });
+                                                setEditingContentIdx(null);
+                                              }}
+                                              style={{
+                                                background: '#2563eb',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                            >
+                                              儲存
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingContentIdx(null)}
+                                              style={{
+                                                background: '#e5e7eb',
+                                                color: '#374151',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                            >
+                                              取消
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // 非編輯狀態：Markdown 顯示
+                                        <div style={{ background: '#f8fafc', borderRadius: 8, padding: '1rem', minHeight: 60 }}>
+                                          <ReactMarkdown
+                                            children={sec.content || "（尚無講義內容）"}
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                              code({ node, inline, className, children, ...props }) {
+                                                const match = /language-(\w+)/.exec(className || '');
+                                                return !inline && match ? (
+                                                  <SyntaxHighlighter
+                                                    style={atomDark}
+                                                    language={match[1]}
+                                                    PreTag="div"
+                                                    {...props}
+                                                  >
+                                                    {String(children).replace(/\n$/, '')}
+                                                  </SyntaxHighlighter>
+                                                ) : (
+                                                  <code className={className} {...props}>
+                                                    {children}
+                                                  </code>
+                                                );
+                                              }
+                                            }}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                      <SkeletonBlock height={20} width="90%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
-                                      <SkeletonBlock height={20} width="80%" style={{ marginBottom: '0.75rem', backgroundColor: '#e5e7eb' }} />
-                                      <SkeletonBlock height={20} width="85%" style={{ backgroundColor: '#e5e7eb' }} />
+                                  )}
+                                  {type.value === "video" && (
+                                    <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                                      {/* 影片內容 */}
+                                      {sec.videoUrl ? (
+                                        <div
+                                          style={{
+                                            width: '100%',
+                                            maxWidth: 640,
+                                            aspectRatio: '16/9',
+                                            background: '#ccc',
+                                            overflow: 'hidden',
+                                            borderRadius: 8,
+                                            margin: '0 auto',
+                                            position: 'relative',
+                                          }}
+                                        >
+                                          <Image
+                                            src={sec.videoUrl}
+                                            alt="影片示意圖"
+                                            fill
+                                            style={{
+                                              objectFit: 'cover'
+                                            }}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div style={videoContainerStyle}>
+                                          <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {type.value === "quiz" && (
+                                    <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                                      {/* 練習題內容 */}
+                                      {sec.questions && sec.questions.length > 0 ? (
+                                        renderQuestions(sec, idx)
+                                      ) : (
+                                        <div style={questionAreaStyle}>
+                                          <SkeletonBlock height={24} width="120px" style={{ backgroundColor: '#e5e7eb' }} />
+                                          <SkeletonBlock height={20} width="80%" style={{ marginBottom: '1rem', backgroundColor: '#e5e7eb' }} />
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                            <SkeletonBlock height={48} width="100%" style={{ backgroundColor: '#e5e7eb', borderRadius: '6px' }} />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {type.value === "discussion" && (
+                                    <div key={type.value} style={{ marginBottom: '1.5rem' }}>
+                                      {/* 申論題內容 */}
+                                      <div style={{ margin: '1rem 0' }}>
+                                        <strong>申論題：</strong>
+                                        <div style={{ margin: '0.5rem 0 1rem 0', color: '#4b5563' }}>
+                                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {sec.content
+                                              ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
+                                              : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                            }
+                                          </ReactMarkdown>
+                                        </div>
+                                        <div data-color-mode="light">
+                                          <MDEditor
+                                            value={discussionAnswers[String(idx)] || ""}
+                                            onChange={val => setDiscussionAnswers(ans => ({ ...ans, [String(idx)]: val || "" }))}
+                                            height={200}
+                                            preview="live"
+                                            textareaProps={{
+                                              placeholder: "請在此輸入你的申論內容（支援 Markdown 排版）...",
+                                              disabled: discussionLoading[String(idx)] || discussionSubmitted[String(idx)],
+                                            }}
+                                          />
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                                          支援 <a href="https://markdown.tw/" target="_blank" rel="noopener noreferrer">Markdown</a> 排版
+                                        </div>
+                                        <div>
+                                          <button
+                                            onClick={async () => {
+                                              setDiscussionLoading(l => ({ ...l, [String(idx)]: true }));
+                                              try {
+                                                const res = await fetch("/api/grade-essay", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json" },
+                                                  body: JSON.stringify({
+                                                    sectionTitle: sec.title,
+                                                    sectionContent: sec.content,
+                                                    essay: discussionAnswers[String(idx)] || "",
+                                                  }),
+                                                });
+                                                const data = await res.json();
+                                                setDiscussionFeedback(f => ({ ...f, [String(idx)]: data.feedback || "AI 批改失敗，請稍後再試。" }));
+                                              } catch {
+                                                setDiscussionFeedback(f => ({ ...f, [String(idx)]: "AI 批改失敗，請稍後再試。" }));
+                                              } finally {
+                                                setDiscussionLoading(l => ({ ...l, [String(idx)]: false }));
+                                              }
+                                            }}
+                                            disabled={
+                                              !discussionAnswers[String(idx)] ||
+                                              discussionLoading[String(idx)] ||
+                                              discussionSubmitted[String(idx)]
+                                            }
+                                            style={{
+                                              backgroundColor: '#7c3aed',
+                                              color: 'white',
+                                              border: 'none',
+                                              borderRadius: 6,
+                                              padding: '0.5rem 1.25rem',
+                                              fontSize: '0.95rem',
+                                              fontWeight: 600,
+                                              cursor: (discussionLoading[String(idx)] || discussionSubmitted[String(idx)]) ? 'not-allowed' : 'pointer',
+                                              opacity: !discussionAnswers[String(idx)] || discussionSubmitted[String(idx)] ? 0.5 : 1,
+                                              marginRight: '1rem'
+                                            }}
+                                          >
+                                            {discussionLoading[String(idx)] ? "批改中..." : "批改"}
+                                          </button>
+                                        </div>
+                                        {/* 顯示 AI 批改建議（支援 markdown） */}
+                                        {discussionFeedback[String(idx)] && (
+                                          <div style={{
+                                            marginTop: '1rem',
+                                            background: '#f3e8ff',
+                                            color: '#7c3aed',
+                                            borderRadius: 6,
+                                            padding: '0.75rem 1rem',
+                                            fontSize: '0.98rem',
+                                            whiteSpace: 'pre-line'
+                                          }}>
+                                            <strong>AI 批改建議：</strong>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                              {discussionFeedback[String(idx)]}
+                                            </ReactMarkdown>
+                                            {/* 送出按鈕 */}
+                                            {!discussionSubmitted[String(idx)] && (
+                                              <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                                                <button
+                                                  onClick={() => setDiscussionSubmitted(s => ({ ...s, [String(idx)]: true }))}
+                                                  style={{
+                                                    backgroundColor: '#22c55e',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: 6,
+                                                    padding: '0.5rem 1.25rem',
+                                                    fontSize: '0.95rem',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer'
+                                                  }}
+                                                >
+                                                  送出
+                                                </button>
+                                              </div>
+                                            )}
+                                            {discussionSubmitted[String(idx)] && (
+                                              <div style={{ marginTop: '1rem', color: '#16a34a', fontWeight: 600 }}>
+                                                已送出，恭喜完成本章討論！
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
