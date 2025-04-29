@@ -1094,6 +1094,10 @@ export default function GenerateCourse() {
   const [editingContentIdx, setEditingContentIdx] = useState<number | null>(null);
   const [editingContentValue, setEditingContentValue] = useState<string>("");
 
+  // ...在 state 區塊
+  const [editingVideoIdx, setEditingVideoIdx] = useState<number | null>(null);
+  const [editingVideoValue, setEditingVideoValue] = useState<string>("");
+
   function isYoutubeUrl(url: string) {
     return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(url);
   }
@@ -2156,62 +2160,212 @@ export default function GenerateCourse() {
                                     </div>
                                   )}
                                   {type.value === "video" && (
-                                    <div key={type.value} style={{ marginBottom: '1.5rem' }}>
-                                      {/* 影片內容 */}
-                                      {sec.videoUrl ? (
-                                        isYoutubeUrl(sec.videoUrl)
-                                          ? (
-                                            <div
+                                    <div key={type.value} style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                                      {/* 編輯狀態 */}
+                                      {editingVideoIdx === idx ? (
+                                        <div>
+                                          <input
+                                            type="text"
+                                            value={editingVideoValue}
+                                            onChange={e => setEditingVideoValue(e.target.value)}
+                                            placeholder="請輸入影片網址（YouTube 或圖片連結）"
+                                            style={{
+                                              width: '100%',
+                                              padding: '0.5rem 0.75rem',
+                                              border: '1px solid #2563eb',
+                                              borderRadius: 6,
+                                              fontSize: '1rem',
+                                              marginBottom: 8,
+                                            }}
+                                            autoFocus
+                                          />
+                                          <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>
+                                            支援 YouTube 影片網址或圖片連結
+                                          </div>
+                                          {/* 預覽區 */}
+                                          {editingVideoValue ? (
+                                            isYoutubeUrl(editingVideoValue)
+                                              ? (
+                                                <div style={{
+                                                  width: '100%',
+                                                  maxWidth: 640,
+                                                  aspectRatio: '16/9',
+                                                  background: '#ccc',
+                                                  overflow: 'hidden',
+                                                  borderRadius: 8,
+                                                  margin: '0 auto 1rem auto',
+                                                  position: 'relative',
+                                                }}>
+                                                  <iframe
+                                                    width="100%"
+                                                    height="100%"
+                                                    src={getYoutubeEmbedUrl(editingVideoValue)}
+                                                    title="YouTube 影片"
+                                                    frameBorder="0"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                    style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                                  />
+                                                </div>
+                                              )
+                                              : (
+                                                <div style={{
+                                                  width: '100%',
+                                                  maxWidth: 640,
+                                                  aspectRatio: '16/9',
+                                                  background: '#ccc',
+                                                  overflow: 'hidden',
+                                                  borderRadius: 8,
+                                                  margin: '0 auto 1rem auto',
+                                                  position: 'relative',
+                                                }}>
+                                                  <img
+                                                    src={editingVideoValue}
+                                                    alt="影片預覽"
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                  />
+                                                </div>
+                                              )
+                                          ) : (
+                                            <div style={{
+                                              width: '100%',
+                                              maxWidth: 640,
+                                              aspectRatio: '16/9',
+                                              background: '#e5e7eb',
+                                              borderRadius: 8,
+                                              margin: '0 auto',
+                                            }} />
+                                          )}
+                                          <div style={{ display: 'flex', gap: 12 }}>
+                                            <button
+                                              onClick={() => {
+                                                setSections(secs => {
+                                                  const arr = [...secs];
+                                                  arr[idx] = { ...arr[idx], videoUrl: editingVideoValue };
+                                                  return arr;
+                                                });
+                                                setEditingVideoIdx(null);
+                                              }}
                                               style={{
-                                                width: '100%',
-                                                maxWidth: 640,
-                                                aspectRatio: '16/9',
-                                                background: '#ccc',
-                                                overflow: 'hidden',
-                                                borderRadius: 8,
-                                                margin: '0 auto',
-                                                position: 'relative',
+                                                background: '#2563eb',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                              disabled={!editingVideoValue.trim()}
+                                            >
+                                              儲存
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingVideoIdx(null)}
+                                              style={{
+                                                background: '#e5e7eb',
+                                                color: '#374151',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
                                               }}
                                             >
-                                              <iframe
-                                                width="100%"
-                                                height="100%"
-                                                src={getYoutubeEmbedUrl(sec.videoUrl)}
-                                                title="YouTube 影片"
-                                                frameBorder="0"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                allowFullScreen
-                                                style={{ borderRadius: 8, width: '100%', height: '100%' }}
-                                              />
-                                            </div>
-                                          )
-                                          : (
-                                            <div
-                                              style={{
-                                                width: '100%',
-                                                maxWidth: 640,
-                                                aspectRatio: '16/9',
-                                                background: '#ccc',
-                                                overflow: 'hidden',
-                                                borderRadius: 8,
-                                                margin: '0 auto',
-                                                position: 'relative',
-                                              }}
-                                            >
-                                              <Image
-                                                src={sec.videoUrl}
-                                                alt="影片示意圖"
-                                                fill
-                                                style={{
-                                                  objectFit: 'cover'
-                                                }}
-                                              />
-                                            </div>
-                                          )
-                                      ) : (
-                                        <div style={videoContainerStyle}>
-                                          <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                                              取消
+                                            </button>
+                                          </div>
                                         </div>
+                                      ) : (
+                                        <>
+                                          {/* 編輯 icon（僅非編輯狀態下顯示） */}
+                                          {editingVideoIdx !== idx && (
+                                            <button
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                setEditingVideoIdx(idx);
+                                                setEditingVideoValue(sec.videoUrl || "");
+                                              }}
+                                              className="edit-pencil-btn"
+                                              style={{
+                                                position: 'absolute',
+                                                top: 8,
+                                                right: 8,
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                padding: 4,
+                                                borderRadius: '50%',
+                                              }}
+                                              title="編輯影片網址"
+                                            >
+                                              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                                                <path
+                                                  d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                                                  fill="#2563eb"
+                                                />
+                                              </svg>
+                                            </button>
+                                          )}
+                                          {/* 影片內容 */}
+                                          {sec.videoUrl ? (
+                                            isYoutubeUrl(sec.videoUrl)
+                                              ? (
+                                                <div
+                                                  style={{
+                                                    width: '100%',
+                                                    maxWidth: 640,
+                                                    aspectRatio: '16/9',
+                                                    background: '#ccc',
+                                                    overflow: 'hidden',
+                                                    borderRadius: 8,
+                                                    margin: '0 auto',
+                                                    position: 'relative',
+                                                  }}
+                                                >
+                                                  <iframe
+                                                    width="100%"
+                                                    height="100%"
+                                                    src={getYoutubeEmbedUrl(sec.videoUrl)}
+                                                    title="YouTube 影片"
+                                                    frameBorder="0"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                    allowFullScreen
+                                                    style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                                  />
+                                                </div>
+                                              )
+                                              : (
+                                                <div
+                                                  style={{
+                                                    width: '100%',
+                                                    maxWidth: 640,
+                                                    aspectRatio: '16/9',
+                                                    background: '#ccc',
+                                                    overflow: 'hidden',
+                                                    borderRadius: 8,
+                                                    margin: '0 auto',
+                                                    position: 'relative',
+                                                  }}
+                                                >
+                                                  <img
+                                                    src={sec.videoUrl}
+                                                    alt="影片示意圖"
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                  />
+                                                </div>
+                                              )
+                                          ) : (
+                                            <div style={{
+                                              width: '100%',
+                                              maxWidth: 640,
+                                              aspectRatio: '16/9',
+                                              background: '#e5e7eb',
+                                              borderRadius: 8,
+                                              margin: '0 auto',
+                                            }} />
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   )}
@@ -2352,62 +2506,212 @@ export default function GenerateCourse() {
                                 </div>
                               )}
                               {type.value === "video" && (
-                                <div key={type.value} style={{ marginBottom: '1.5rem' }}>
-                                  {/* 影片內容 */}
-                                  {sec.videoUrl ? (
-                                    isYoutubeUrl(sec.videoUrl)
-                                      ? (
-                                        <div
+                                <div key={type.value} style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                                  {/* 編輯狀態 */}
+                                  {editingVideoIdx === idx ? (
+                                    <div>
+                                      <input
+                                        type="text"
+                                        value={editingVideoValue}
+                                        onChange={e => setEditingVideoValue(e.target.value)}
+                                        placeholder="請輸入影片網址（YouTube 或圖片連結）"
+                                        style={{
+                                          width: '100%',
+                                          padding: '0.5rem 0.75rem',
+                                          border: '1px solid #2563eb',
+                                          borderRadius: 6,
+                                          fontSize: '1rem',
+                                          marginBottom: 8,
+                                        }}
+                                        autoFocus
+                                      />
+                                      <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>
+                                        支援 YouTube 影片網址或圖片連結
+                                      </div>
+                                      {/* 預覽區 */}
+                                      {editingVideoValue ? (
+                                        isYoutubeUrl(editingVideoValue)
+                                          ? (
+                                            <div style={{
+                                              width: '100%',
+                                              maxWidth: 640,
+                                              aspectRatio: '16/9',
+                                              background: '#ccc',
+                                              overflow: 'hidden',
+                                              borderRadius: 8,
+                                              margin: '0 auto 1rem auto',
+                                              position: 'relative',
+                                            }}>
+                                              <iframe
+                                                width="100%"
+                                                height="100%"
+                                                src={getYoutubeEmbedUrl(editingVideoValue)}
+                                                title="YouTube 影片"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                                style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                              />
+                                            </div>
+                                          )
+                                          : (
+                                            <div style={{
+                                              width: '100%',
+                                              maxWidth: 640,
+                                              aspectRatio: '16/9',
+                                              background: '#ccc',
+                                              overflow: 'hidden',
+                                              borderRadius: 8,
+                                              margin: '0 auto 1rem auto',
+                                              position: 'relative',
+                                            }}>
+                                              <img
+                                                src={editingVideoValue}
+                                                alt="影片預覽"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                              />
+                                            </div>
+                                          )
+                                      ) : (
+                                        <div style={{
+                                          width: '100%',
+                                          maxWidth: 640,
+                                          aspectRatio: '16/9',
+                                          background: '#e5e7eb',
+                                          borderRadius: 8,
+                                          margin: '0 auto',
+                                        }} />
+                                      )}
+                                      <div style={{ display: 'flex', gap: 12 }}>
+                                        <button
+                                          onClick={() => {
+                                            setSections(secs => {
+                                              const arr = [...secs];
+                                              arr[idx] = { ...arr[idx], videoUrl: editingVideoValue };
+                                              return arr;
+                                            });
+                                            setEditingVideoIdx(null);
+                                          }}
                                           style={{
-                                            width: '100%',
-                                            maxWidth: 640,
-                                            aspectRatio: '16/9',
-                                            background: '#ccc',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            margin: '0 auto',
-                                            position: 'relative',
+                                            background: '#2563eb',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            padding: '6px 18px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                          disabled={!editingVideoValue.trim()}
+                                        >
+                                          儲存
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingVideoIdx(null)}
+                                          style={{
+                                            background: '#e5e7eb',
+                                            color: '#374151',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            padding: '6px 18px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
                                           }}
                                         >
-                                          <iframe
-                                            width="100%"
-                                            height="100%"
-                                            src={getYoutubeEmbedUrl(sec.videoUrl)}
-                                            title="YouTube 影片"
-                                            frameBorder="0"
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                            allowFullScreen
-                                            style={{ borderRadius: 8, width: '100%', height: '100%' }}
-                                          />
-                                        </div>
-                                      )
-                                      : (
-                                        <div
-                                          style={{
-                                            width: '100%',
-                                            maxWidth: 640,
-                                            aspectRatio: '16/9',
-                                            background: '#ccc',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            margin: '0 auto',
-                                            position: 'relative',
-                                          }}
-                                        >
-                                          <Image
-                                            src={sec.videoUrl}
-                                            alt="影片示意圖"
-                                            fill
-                                            style={{
-                                              objectFit: 'cover'
-                                            }}
-                                          />
-                                        </div>
-                                      )
-                                  ) : (
-                                    <div style={videoContainerStyle}>
-                                      <SkeletonBlock height="100%" width="100%" style={{ borderRadius: '8px', backgroundColor: '#e5e7eb' }} />
+                                          取消
+                                        </button>
+                                      </div>
                                     </div>
+                                  ) : (
+                                    <>
+                                      {/* 編輯 icon（僅非編輯狀態下顯示） */}
+                                      {editingVideoIdx !== idx && (
+                                        <button
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setEditingVideoIdx(idx);
+                                            setEditingVideoValue(sec.videoUrl || "");
+                                          }}
+                                          className="edit-pencil-btn"
+                                          style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            right: 8,
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            padding: 4,
+                                            borderRadius: '50%',
+                                          }}
+                                          title="編輯影片網址"
+                                        >
+                                          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                                            <path
+                                              d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                                              fill="#2563eb"
+                                            />
+                                          </svg>
+                                        </button>
+                                      )}
+                                      {/* 影片內容 */}
+                                      {sec.videoUrl ? (
+                                        isYoutubeUrl(sec.videoUrl)
+                                          ? (
+                                            <div
+                                              style={{
+                                                width: '100%',
+                                                maxWidth: 640,
+                                                aspectRatio: '16/9',
+                                                background: '#ccc',
+                                                overflow: 'hidden',
+                                                borderRadius: 8,
+                                                margin: '0 auto',
+                                                position: 'relative',
+                                              }}
+                                            >
+                                              <iframe
+                                                width="100%"
+                                                height="100%"
+                                                src={getYoutubeEmbedUrl(sec.videoUrl)}
+                                                title="YouTube 影片"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                                style={{ borderRadius: 8, width: '100%', height: '100%' }}
+                                              />
+                                            </div>
+                                          )
+                                          : (
+                                            <div
+                                              style={{
+                                                width: '100%',
+                                                maxWidth: 640,
+                                                aspectRatio: '16/9',
+                                                background: '#ccc',
+                                                overflow: 'hidden',
+                                                borderRadius: 8,
+                                                margin: '0 auto',
+                                                position: 'relative',
+                                              }}
+                                            >
+                                              <img
+                                                src={sec.videoUrl}
+                                                alt="影片示意圖"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                              />
+                                            </div>
+                                          )
+                                      ) : (
+                                        <div style={{
+                                          width: '100%',
+                                          maxWidth: 640,
+                                          aspectRatio: '16/9',
+                                          background: '#e5e7eb',
+                                          borderRadius: 8,
+                                          margin: '0 auto',
+                                        }} />
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               )}
