@@ -25,6 +25,9 @@ type Section = {
     message: string;
     retrying: boolean;
   };
+  // 新增支援討論題自訂內容
+  discussionPrompt?: string;
+  discussionDefault?: string;
 };
 
 // 在檔案前面 type 區域加上
@@ -1362,6 +1365,11 @@ export default function GenerateCourse() {
     return id ? `https://www.youtube.com/embed/${id}` : url;
   }
 
+  // ...其他 state
+  const [editingDiscussionIdx, setEditingDiscussionIdx] = useState<number | null>(null);
+  const [editingDiscussionPrompt, setEditingDiscussionPrompt] = useState<string>("");
+  const [editingDiscussionDefault, setEditingDiscussionDefault] = useState<string>("");
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -2651,21 +2659,145 @@ export default function GenerateCourse() {
                                     </div>
                                   )}
                                   {type.value === "discussion" && (
-                                    <div key={type.value} style={{ marginBottom: '1.5rem' }}>
-                                      {/* 申論題內容 */}
+                                    <div key={type.value} style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                                      {/* 編輯按鈕（僅非編輯狀態下顯示） */}
+                                      {editingDiscussionIdx !== idx && (
+                                        <button
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setEditingDiscussionIdx(idx);
+                                            setEditingDiscussionPrompt(
+                                              (sec.discussionPrompt && sec.discussionPrompt.trim())
+                                                ? sec.discussionPrompt
+                                                : (sec.content
+                                                    ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
+                                                    : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                                  )
+                                            );
+                                            setEditingDiscussionDefault(sec.discussionDefault ?? "");
+                                          }}
+                                          className="edit-pencil-btn"
+                                          style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            right: 8,
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            padding: 4,
+                                            borderRadius: '50%',
+                                          }}
+                                          title="編輯討論題"
+                                        >
+                                          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                                            <path
+                                              d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                                              fill="#2563eb"
+                                            />
+                                          </svg>
+                                        </button>
+                                      )}
+
+                                      {/* 編輯狀態 */}
+                                      {editingDiscussionIdx === idx ? (
+                                        <div style={{ marginBottom: 16 }}>
+                                          <div style={{ marginBottom: 12 }}>
+                                            <label style={{ fontWeight: 500, color: '#374151' }}>討論題說明：</label>
+                                            <textarea
+                                              value={editingDiscussionPrompt}
+                                              onChange={e => setEditingDiscussionPrompt(e.target.value)}
+                                              style={{
+                                                width: '100%',
+                                                minHeight: 48,
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 6,
+                                                padding: '0.5rem',
+                                                fontSize: '1rem',
+                                                marginTop: 4,
+                                                marginBottom: 8,
+                                              }}
+                                              placeholder="請輸入討論題說明"
+                                            />
+                                          </div>
+                                          <div style={{ marginBottom: 12 }}>
+                                            <label style={{ fontWeight: 500, color: '#374151' }}>預設內容（可選）：</label>
+                                            <textarea
+                                              value={editingDiscussionDefault}
+                                              onChange={e => setEditingDiscussionDefault(e.target.value)}
+                                              style={{
+                                                width: '100%',
+                                                minHeight: 48,
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 6,
+                                                padding: '0.5rem',
+                                                fontSize: '1rem',
+                                                marginTop: 4,
+                                                marginBottom: 8,
+                                              }}
+                                              placeholder="可填寫預設內容"
+                                            />
+                                          </div>
+                                          <div style={{ display: 'flex', gap: 12 }}>
+                                            <button
+                                              onClick={() => {
+                                                setSections(secs => {
+                                                  const arr = [...secs];
+                                                  arr[idx] = {
+                                                    ...arr[idx],
+                                                    discussionPrompt: editingDiscussionPrompt,
+                                                    discussionDefault: editingDiscussionDefault,
+                                                  };
+                                                  return arr;
+                                                });
+                                                setEditingDiscussionIdx(null);
+                                              }}
+                                              style={{
+                                                background: '#2563eb',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                            >
+                                              儲存
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingDiscussionIdx(null)}
+                                              style={{
+                                                background: '#e5e7eb',
+                                                color: '#374151',
+                                                border: 'none',
+                                                borderRadius: 6,
+                                                padding: '6px 18px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                            >
+                                              取消
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : null}
+
+                                      {/* 顯示討論題內容 */}
                                       <div style={{ margin: '1rem 0' }}>
                                         <strong>申論題：</strong>
                                         <div style={{ margin: '0.5rem 0 1rem 0', color: '#4b5563' }}>
                                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                            {sec.content
-                                              ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
-                                              : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                            {sec.discussionPrompt?.trim()
+                                              ? sec.discussionPrompt
+                                              : (sec.content
+                                                  ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
+                                                  : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                                )
                                             }
                                           </ReactMarkdown>
                                         </div>
                                         <div data-color-mode="light">
                                           <MDEditor
-                                            value={discussionAnswers[String(idx)] || ""}
+                                            value={discussionAnswers[String(idx)] ?? sec.discussionDefault ?? ""}
                                             onChange={val => setDiscussionAnswers(ans => ({ ...ans, [String(idx)]: val || "" }))}
                                             height={200}
                                             preview="live"
@@ -3001,21 +3133,145 @@ export default function GenerateCourse() {
                                 </div>
                               )}
                               {type.value === "discussion" && (
-                                <div key={type.value} style={{ marginBottom: '1.5rem' }}>
-                                  {/* 申論題內容 */}
+                                <div key={type.value} style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                                  {/* 編輯按鈕（僅非編輯狀態下顯示） */}
+                                  {editingDiscussionIdx !== idx && (
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setEditingDiscussionIdx(idx);
+                                        setEditingDiscussionPrompt(
+                                          (sec.discussionPrompt && sec.discussionPrompt.trim())
+                                            ? sec.discussionPrompt
+                                            : (sec.content
+                                                ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
+                                                : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                              )
+                                        );
+                                        setEditingDiscussionDefault(sec.discussionDefault ?? "");
+                                      }}
+                                      className="edit-pencil-btn"
+                                      style={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        padding: 4,
+                                        borderRadius: '50%',
+                                      }}
+                                      title="編輯討論題"
+                                    >
+                                      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                                        <path
+                                          d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                                          fill="#2563eb"
+                                        />
+                                      </svg>
+                                    </button>
+                                  )}
+
+                                  {/* 編輯狀態 */}
+                                  {editingDiscussionIdx === idx ? (
+                                    <div style={{ marginBottom: 16 }}>
+                                      <div style={{ marginBottom: 12 }}>
+                                        <label style={{ fontWeight: 500, color: '#374151' }}>討論題說明：</label>
+                                        <textarea
+                                          value={editingDiscussionPrompt}
+                                          onChange={e => setEditingDiscussionPrompt(e.target.value)}
+                                          style={{
+                                            width: '100%',
+                                            minHeight: 48,
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: 6,
+                                            padding: '0.5rem',
+                                            fontSize: '1rem',
+                                            marginTop: 4,
+                                            marginBottom: 8,
+                                          }}
+                                          placeholder="請輸入討論題說明"
+                                        />
+                                      </div>
+                                      <div style={{ marginBottom: 12 }}>
+                                        <label style={{ fontWeight: 500, color: '#374151' }}>預設內容（可選）：</label>
+                                        <textarea
+                                          value={editingDiscussionDefault}
+                                          onChange={e => setEditingDiscussionDefault(e.target.value)}
+                                          style={{
+                                            width: '100%',
+                                            minHeight: 48,
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: 6,
+                                            padding: '0.5rem',
+                                            fontSize: '1rem',
+                                            marginTop: 4,
+                                            marginBottom: 8,
+                                          }}
+                                          placeholder="可填寫預設內容"
+                                        />
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 12 }}>
+                                        <button
+                                          onClick={() => {
+                                            setSections(secs => {
+                                              const arr = [...secs];
+                                              arr[idx] = {
+                                                ...arr[idx],
+                                                discussionPrompt: editingDiscussionPrompt,
+                                                discussionDefault: editingDiscussionDefault,
+                                              };
+                                              return arr;
+                                            });
+                                            setEditingDiscussionIdx(null);
+                                          }}
+                                          style={{
+                                            background: '#2563eb',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            padding: '6px 18px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          儲存
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingDiscussionIdx(null)}
+                                          style={{
+                                            background: '#e5e7eb',
+                                            color: '#374151',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            padding: '6px 18px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          取消
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
+
+                                  {/* 顯示討論題內容 */}
                                   <div style={{ margin: '1rem 0' }}>
                                     <strong>申論題：</strong>
                                     <div style={{ margin: '0.5rem 0 1rem 0', color: '#4b5563' }}>
                                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                        {sec.content
-                                          ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
-                                          : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                        {sec.discussionPrompt?.trim()
+                                          ? sec.discussionPrompt
+                                          : (sec.content
+                                              ? `請根據本章內容，寫一段小論文或申論，說明你對於「${sec.title}」的理解與看法。`
+                                              : `請針對「${sec.title}」這個主題，寫一段小論文或申論，說明你的理解與看法。`
+                                            )
                                         }
                                       </ReactMarkdown>
                                     </div>
                                     <div data-color-mode="light">
                                       <MDEditor
-                                        value={discussionAnswers[String(idx)] || ""}
+                                        value={discussionAnswers[String(idx)] ?? sec.discussionDefault ?? ""}
                                         onChange={val => setDiscussionAnswers(ans => ({ ...ans, [String(idx)]: val || "" }))}
                                         height={200}
                                         preview="live"
