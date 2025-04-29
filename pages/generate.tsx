@@ -4,8 +4,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import atomDark from "react-syntax-highlighter/dist/esm/styles/prism/atom-dark";
 import remarkGfm from 'remark-gfm';
 import axios from "axios";
-import Image from 'next/image';
 import dynamic from "next/dynamic";
+import Image from 'next/image';
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 // 臨時型別定義（請根據實際情況調整）
@@ -26,6 +26,9 @@ type Section = {
     retrying: boolean;
   };
 };
+
+// 在檔案前面 type 區域加上
+type ContentType = { label: string; value: "lecture" | "video" | "quiz" | "discussion" };
 
 // --- Helper Functions & Components (使用內聯樣式) ---
 
@@ -327,13 +330,14 @@ export default function GenerateCourse() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [customSectionTitles, setCustomSectionTitles] = useState<string[]>(Array(numSections).fill(""));
   const [showQuizHistory, setShowQuizHistory] = useState(false);
-  const defaultContentTypes = [
+  // 然後在 defaultContentTypes 宣告時
+  const defaultContentTypes: ContentType[] = [
     { label: "講義", value: "lecture" },
     { label: "影片", value: "video" },
     { label: "練習題", value: "quiz" },
     { label: "討論", value: "discussion" },
   ];
-  const [contentTypes, setContentTypes] = useState(defaultContentTypes);
+  const [contentTypes, setContentTypes] = useState<ContentType[]>(defaultContentTypes);
   const [completedSteps, setCompletedSteps] = useState(0);
 
   // 總步驟數 = 1 (大綱) + 章節數 * 3 (內容 + 影片 + 題目)
@@ -625,22 +629,11 @@ export default function GenerateCourse() {
     padding: '1.5rem', // 內容區內邊距
   };
 
-  const videoContainerStyle: CSSProperties = {
-    aspectRatio: '16 / 9', // 保持比例
-    width: '100%',
-    maxWidth: '640px', // 限制最大寬度
-    margin: '0 auto 1.5rem auto', // 置中並添加底部間距
-  };
-
   const questionAreaStyle: CSSProperties = {
     marginTop: '0.2rem',
     paddingTop: 0,
     paddingLeft: '1em',
     // borderTop: '1px solid #e5e7eb', // 已移除
-  };
-
-  const lectureAreaStyle: CSSProperties = {
-    paddingLeft: '1em',
   };
 
   // 選項標籤基礎樣式 - 使用獨立邊框屬性
@@ -1449,7 +1442,7 @@ export default function GenerateCourse() {
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={inputLabelStyle}>內容型別（可拖曳排序、可刪除、可新增）</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                {contentTypes.map((type, idx) => (
+                {contentTypes.map((type: ContentType, idx) => (
                   <div
                     key={type.value}
                     style={{
@@ -1542,7 +1535,7 @@ export default function GenerateCourse() {
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => setContentTypes(cts => [...cts, t])}
+                      onClick={() => setContentTypes(cts => [...cts, t as ContentType])}
                       style={{
                         background: '#e0e7ff',
                         color: '#2563eb',
@@ -1637,10 +1630,12 @@ export default function GenerateCourse() {
           }}>
             {/* Banner 圖片 */}
             <div style={{ marginBottom: 18, textAlign: 'center' }}>
-              <img
+              <Image
                 src={courseBanner}
                 alt="課程 Banner"
                 style={{ width: '100%', maxWidth: 600, borderRadius: 8, objectFit: 'cover', margin: '0 auto' }}
+                width={600}
+                height={200}
               />
             </div>
             {/* 說明文件 URL 列表 */}
@@ -1857,10 +1852,12 @@ export default function GenerateCourse() {
           }}>
             {/* Banner 圖片 */}
             <div style={{ marginBottom: 18, textAlign: 'center' }}>
-              <img
+              <Image
                 src={courseBanner}
                 alt="課程 Banner"
                 style={{ width: '100%', maxWidth: 600, borderRadius: 8, objectFit: 'cover', margin: '0 auto' }}
+                width={600}
+                height={200}
               />
             </div>
             {/* 說明文件 URL 列表 */}
@@ -2000,7 +1997,7 @@ export default function GenerateCourse() {
                 {isExpanded && (
                   <div style={sectionContentStyle}>
                     {/* 動態依 contentTypes 排序渲染內容 */}
-                    {contentTypes.map((type) => {
+                    {contentTypes.map((type: ContentType) => {
                       const expanded = partExpanded[idx]?.[type.value] ?? false;
                       return (
                         <div key={type.value} style={{ marginBottom: 18, borderBottom: '1px solid #e5e7eb' }}>
@@ -2048,7 +2045,7 @@ export default function GenerateCourse() {
                           </div>
                           {expanded && (
                             <div style={{ marginTop: 8 }}>
-                              {type.value === "lecture" && (
+                              {(type.value as ContentType['value']) === "lecture" && (
                                 <div key={type.value} style={{ marginBottom: '1.5rem' }}>
                                   {/* 講義內容 */}
                                   {contentTypes.some(t => t.value === "lecture") && (
@@ -2133,12 +2130,11 @@ export default function GenerateCourse() {
                                         // 非編輯狀態：Markdown 顯示
                                         <div style={{ background: '#f8fafc', borderRadius: 8, padding: '1rem', minHeight: 60 }}>
                                           <ReactMarkdown
-                                            children={sec.content || "（尚無講義內容）"}
                                             remarkPlugins={[remarkGfm]}
                                             components={{
-                                              code({ node, inline, className, children, ...props }) {
+                                              code({ className, children, ...props }) {
                                                 const match = /language-(\w+)/.exec(className || '');
-                                                return !inline && match ? (
+                                                return match ? (
                                                   <SyntaxHighlighter
                                                     style={atomDark}
                                                     language={match[1]}
@@ -2154,7 +2150,9 @@ export default function GenerateCourse() {
                                                 );
                                               }
                                             }}
-                                          />
+                                          >
+                                            {sec.content || "（尚無講義內容）"}
+                                          </ReactMarkdown>
                                         </div>
                                       )}
                                     </div>
@@ -2219,11 +2217,13 @@ export default function GenerateCourse() {
                                                   margin: '0 auto 1rem auto',
                                                   position: 'relative',
                                                 }}>
-                                                  <img
+                                                  <Image
                                                     src={editingVideoValue}
                                                     alt="影片預覽"
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
                                                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                    width={640}
+                                                    height={360}
                                                   />
                                                 </div>
                                               )
@@ -2348,10 +2348,12 @@ export default function GenerateCourse() {
                                                     position: 'relative',
                                                   }}
                                                 >
-                                                  <img
+                                                  <Image
                                                     src={sec.videoUrl}
                                                     alt="影片示意圖"
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                    width={640}
+                                                    height={360}
                                                   />
                                                 </div>
                                               )
@@ -2565,11 +2567,13 @@ export default function GenerateCourse() {
                                               margin: '0 auto 1rem auto',
                                               position: 'relative',
                                             }}>
-                                              <img
+                                              <Image
                                                 src={editingVideoValue}
                                                 alt="影片預覽"
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
                                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                width={640}
+                                                height={360}
                                               />
                                             </div>
                                           )
@@ -2694,10 +2698,12 @@ export default function GenerateCourse() {
                                                 position: 'relative',
                                               }}
                                             >
-                                              <img
+                                              <Image
                                                 src={sec.videoUrl}
                                                 alt="影片示意圖"
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                width={640}
+                                                height={360}
                                               />
                                             </div>
                                           )
