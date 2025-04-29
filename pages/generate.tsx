@@ -1086,6 +1086,10 @@ export default function GenerateCourse() {
     autoResizeOutlineContent();
   }, [outlineContent]);
 
+  // ...其他 state
+  const [editingSectionIdx, setEditingSectionIdx] = useState<number | null>(null);
+  const [editingSectionTitle, setEditingSectionTitle] = useState<string>("");
+
   return (
     <div style={containerStyle}>
       {/* 標題區 */}
@@ -1888,42 +1892,78 @@ export default function GenerateCourse() {
                   onClick={() => setExpandedSections(s => ({ ...s, [String(idx)]: !isExpanded }))}
                 >
                   <h3 style={sectionTitleStyle}>
-                    {sec.title || <SkeletonBlock width="40%" height={24} style={{ backgroundColor: '#e5e7eb' }} />}
-                    {/* === 新增：練習題進度顯示 === */}
-                    {contentTypes.some(t => t.value === "quiz") && sec.questions && sec.questions.length > 0 && (
-                      <span style={{ fontSize: '0.95rem', color: '#2563eb', marginLeft: 12, fontWeight: 500 }}>
-                        練習題（
-                        {
-                          (() => {
-                            const currentQIdx = currentQuestionIdx[String(idx)] ?? 0;
-                            const submittedValue = submitted[String(idx)];
-                            const question = sec.questions?.[currentQIdx];
-                            let correctCount = currentQIdx;
-                            let isCorrectAnswer = false;
-                            if (question) {
-                              const isTF = question.options && question.options.length === 2 && question.options.every((opt: string) => ['是', '否', 'True', 'False', '對', '錯'].includes(opt));
-                              isCorrectAnswer = submittedValue !== undefined && (
-                                isTF
-                                  ? (submittedValue === '是' && ['是', 'True', '對'].includes(question.answer)) ||
-                                    (submittedValue === '否' && ['否', 'False', '錯'].includes(question.answer))
-                                  : submittedValue === question.answer
-                              );
-                              if (isCorrectAnswer) correctCount += 1;
-                            }
-                            return `${correctCount}/${sec.questions.length}`;
-                          })()
-                        }
-                        ）
-                      </span>
+                    <span>
+                      {sec.title || <SkeletonBlock width="40%" height={24} style={{ backgroundColor: '#e5e7eb' }} />}
+                    </span>
+                    {editingSectionIdx === idx && (
+                      <input
+                        type="text"
+                        value={editingSectionTitle}
+                        autoFocus
+                        onChange={e => setEditingSectionTitle(e.target.value)}
+                        onBlur={() => {
+                          setSections(secs => {
+                            const arr = [...secs];
+                            arr[idx] = { ...arr[idx], title: editingSectionTitle.trim() || arr[idx].title };
+                            return arr;
+                          });
+                          setEditingSectionIdx(null);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            setSections(secs => {
+                              const arr = [...secs];
+                              arr[idx] = { ...arr[idx], title: editingSectionTitle.trim() || arr[idx].title };
+                              return arr;
+                            });
+                            setEditingSectionIdx(null);
+                          } else if (e.key === "Escape") {
+                            setEditingSectionIdx(null);
+                          }
+                        }}
+                        style={{
+                          fontSize: '1.1rem',
+                          fontWeight: 600,
+                          color: '#111827',
+                          border: '1px solid #60a5fa',
+                          borderRadius: 6,
+                          padding: '0.2rem 0.5rem',
+                          minWidth: 120,
+                          marginLeft: 8,
+                        }}
+                      />
                     )}
-                    {/* === 新增：申論題批改狀態 emoji與文字 === */}
-                    {contentTypes.some(t => t.value === "discussion") && (
-                      <span style={{ fontSize: '0.95rem', color: '#7c3aed', marginLeft: 12, fontWeight: 500, verticalAlign: 'middle', display: 'inline-flex', alignItems: 'center' }}>
-                        討論
-                        <span style={{ fontSize: '1.2rem', marginLeft: 4 }}>
-                          {discussionSubmitted[String(idx)] ? '✅' : '☐'}
-                        </span>
-                      </span>
+                    {editingSectionIdx !== idx && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          setEditingSectionIdx(idx);
+                          setEditingSectionTitle(sec.title);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          marginLeft: 8,
+                          verticalAlign: 'middle',
+                          padding: 0,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          borderRadius: '50%',
+                          transition: 'background 0.18s',
+                        }}
+                        className="edit-pencil-btn"
+                        title="編輯章節標題"
+                        tabIndex={0}
+                      >
+                        {/* pencil SVG icon */}
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                          <path
+                            d="M15.232 3.232a2 2 0 0 1 2.828 2.828l-9.193 9.193a2 2 0 0 1-.707.464l-3.25 1.083a.5.5 0 0 1-.632-.632l1.083-3.25a2 2 0 0 1 .464-.707l9.193-9.193z"
+                            fill="#2563eb"
+                          />
+                        </svg>
+                      </button>
                     )}
                   </h3>
                   {/* 載入/錯誤指示 */}
