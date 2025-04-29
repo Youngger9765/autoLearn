@@ -1762,17 +1762,6 @@ export default function GenerateCourse() {
                   </button>
                 </span>
               </div>
-              {/* 已完成大綱 parts（sections）置頂顯示 */}
-              {sections.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ color: '#2563eb', fontWeight: 500, marginBottom: 4 }}>已產生大綱：</div>
-                  <ol style={{ paddingLeft: 24, margin: 0 }}>
-                    {sections.map((s, i) => (
-                      <li key={i} style={{ marginBottom: 2 }}>{s.title}</li>
-                    ))}
-                  </ol>
-                </div>
-              )}
               <textarea
                 ref={outlineContentRef} // 新增 ref
                 value={outlineContent}
