@@ -344,7 +344,7 @@ AI 助教（assistant）基於 OpenAI Assistant API，與使用者的互動採�
 - [x] 支援編輯章節標題（section title）
 - [x] 支援編輯章節講義內容（section content/lecture，支援 Markdown）
 - [x] 支援編輯章節影片連結或影片封面（videoUrl）
-- [ ] 支援編輯練習題（題目文字、選項、答案、提示）
+- [x] 支援編輯練習題（題目文字、選項、答案、提示）
 - [ ] 支援編輯討論題（題目說明、預設內容）
 - [ ] 編輯後可即時儲存（自動儲存或有「儲存」按鈕）
 - [ ] 編輯狀態下有明顯的 UI 標示（如「編輯中」提示、input/textarea 樣式）
