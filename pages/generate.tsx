@@ -775,8 +775,15 @@ export default function GenerateCourse() {
 
   // --- 處理題目顯示和互動的邏輯 ---
   const renderQuestions = (sec: Section, secIndex: number) => {
-    const currentQIdx = currentQuestionIdx[String(secIndex)] ?? 0;
-    const question = sec.questions?.[currentQIdx];
+    // 判斷是否為編輯狀態
+    const isEditing = editingQuiz && editingQuiz.sectionIdx === secIndex;
+    // 編輯模式下，強制用最新的 section/questions
+    const realSection = isEditing && editingQuiz
+      ? sections[editingQuiz.sectionIdx]
+      : sec;
+    const realQuestions = realSection.questions || [];
+    const currentQIdx = isEditing && editingQuiz ? editingQuiz.questionIdx : (currentQuestionIdx[String(secIndex)] ?? 0);
+    const question = realQuestions[currentQIdx];
     const submittedValue = submitted[String(secIndex)];
 
     if (!question) {
@@ -801,12 +808,247 @@ export default function GenerateCourse() {
     let correctCount = currentQIdx;
     if (isCorrectAnswer) correctCount += 1;
 
+    if (isEditing && editingQuizData) {
+      // 編輯模式
+      const canPrev = currentQIdx > 0;
+      const canNext = currentQIdx < totalQuestions - 1;
+
+      // 儲存目前編輯內容
+      const saveCurrentEdit = () => {
+        setSections(secs => {
+          const arr = [...secs];
+          const questions = [...arr[secIndex].questions];
+          questions[currentQIdx] = { ...editingQuizData };
+          arr[secIndex] = { ...arr[secIndex], questions };
+          return arr;
+        });
+      };
+
+      return (
+        <div style={questionAreaStyle}>
+          <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>
+            編輯練習題（{currentQIdx + 1}/{totalQuestions}）
+          </h4>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500, color: '#374151' }}>題目文字：</label>
+            <textarea
+              value={editingQuizData.question_text}
+              onChange={e => setEditingQuizData({ ...editingQuizData, question_text: e.target.value })}
+              style={{
+                width: '100%',
+                minHeight: 48,
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                padding: '0.5rem',
+                fontSize: '1rem',
+                marginTop: 4,
+                marginBottom: 8,
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500, color: '#374151' }}>選項：</label>
+            {editingQuizData.options.map((opt, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={e => {
+                    const arr = [...editingQuizData.options];
+                    arr[i] = e.target.value;
+                    setEditingQuizData({ ...editingQuizData, options: arr });
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem 0.7rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: '1rem',
+                    marginRight: 8,
+                  }}
+                />
+                {/* 刪除選項（至少保留2個） */}
+                {editingQuizData.options.length > 2 && (
+                  <button
+                    onClick={() => {
+                      setEditingQuizData({
+                        ...editingQuizData,
+                        options: editingQuizData.options.filter((_, idx) => idx !== i),
+                        // 若刪除的是答案，答案自動設為第一個
+                        answer: editingQuizData.answer === opt ? editingQuizData.options[0] : editingQuizData.answer,
+                      });
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#b91c1c',
+                      fontSize: 18,
+                      cursor: 'pointer',
+                    }}
+                    title="刪除選項"
+                  >✖️</button>
+                )}
+              </div>
+            ))}
+            {/* 新增選項 */}
+            <button
+              onClick={() => setEditingQuizData({ ...editingQuizData, options: [...editingQuizData.options, ""] })}
+              style={{
+                background: '#e0e7ff',
+                color: '#2563eb',
+                border: '1px solid #2563eb',
+                borderRadius: 20,
+                padding: '0.3rem 1.2rem',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginTop: 6,
+              }}
+            >＋ 新增選項</button>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500, color: '#374151' }}>正確答案：</label>
+            <select
+              value={editingQuizData.answer}
+              onChange={e => setEditingQuizData({ ...editingQuizData, answer: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.4rem 0.7rem',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                fontSize: '1rem',
+                marginTop: 4,
+              }}
+            >
+              {editingQuizData.options.map((opt, i) => (
+                <option key={i} value={opt}>{opt || `選項${i + 1}`}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontWeight: 500, color: '#374151' }}>提示（可選）：</label>
+            <input
+              type="text"
+              value={editingQuizData.hint || ""}
+              onChange={e => setEditingQuizData({ ...editingQuizData, hint: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.4rem 0.7rem',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                fontSize: '1rem',
+                marginTop: 4,
+              }}
+              placeholder="可填寫提示內容"
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+            <button
+              onClick={() => {
+                saveCurrentEdit();
+                setEditingQuiz(null);
+                setEditingQuizData(null);
+              }}
+              style={{
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 18px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >儲存</button>
+            <button
+              onClick={() => {
+                setEditingQuiz(null);
+                setEditingQuizData(null);
+              }}
+              style={{
+                background: '#e5e7eb',
+                color: '#374151',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 18px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >取消</button>
+            {/* 上一題 */}
+            <button
+              onClick={() => {
+                setSections(secs => {
+                  const arr = [...secs];
+                  const questions = [...arr[secIndex].questions];
+                  questions[currentQIdx] = { ...editingQuizData };
+                  arr[secIndex] = { ...arr[secIndex], questions };
+                  return arr;
+                });
+                setEditingQuiz({ sectionIdx: secIndex, questionIdx: currentQIdx - 1 });
+              }}
+              disabled={!canPrev}
+              style={{
+                background: canPrev ? '#f3f4f6' : '#e5e7eb',
+                color: canPrev ? '#2563eb' : '#aaa',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 18px',
+                fontWeight: 600,
+                cursor: canPrev ? 'pointer' : 'not-allowed',
+              }}
+            >上一題</button>
+            {/* 下一題 */}
+            <button
+              onClick={() => {
+                setSections(secs => {
+                  const arr = [...secs];
+                  const questions = [...arr[secIndex].questions];
+                  questions[currentQIdx] = { ...editingQuizData };
+                  arr[secIndex] = { ...arr[secIndex], questions };
+                  return arr;
+                });
+                setEditingQuiz({ sectionIdx: secIndex, questionIdx: currentQIdx + 1 });
+              }}
+              disabled={!canNext}
+              style={{
+                background: canNext ? '#f3f4f6' : '#e5e7eb',
+                color: canNext ? '#2563eb' : '#aaa',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 18px',
+                fontWeight: 600,
+                cursor: canNext ? 'pointer' : 'not-allowed',
+              }}
+            >下一題</button>
+          </div>
+        </div>
+      );
+    }
+
+    // === 原本的題目顯示區塊 ===
     return (
       <div style={questionAreaStyle}>
-        {/* === 修改這裡，顯示進度 === */}
-        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>
-          隨堂練習（{correctCount}/{totalQuestions}）
-        </h4>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: '#374151' }}>
+            隨堂練習（{correctCount}/{totalQuestions}）
+          </h4>
+          {/* 編輯按鈕 */}
+          <button
+            onClick={() => {
+              setEditingQuiz({ sectionIdx: secIndex, questionIdx: currentQIdx });
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#2563eb',
+              fontSize: 18,
+              cursor: 'pointer',
+              fontWeight: 600,
+              marginLeft: 8,
+            }}
+            title="編輯本題"
+          >✏️ 編輯</button>
+        </div>
         <div>
           <div style={{ marginBottom: '1rem', fontWeight: 500, color: '#1f2937' }}>
             <ReactMarkdown
@@ -1090,6 +1332,25 @@ export default function GenerateCourse() {
   // ...在 state 區塊
   const [editingVideoIdx, setEditingVideoIdx] = useState<number | null>(null);
   const [editingVideoValue, setEditingVideoValue] = useState<string>("");
+
+  // ...其他 state
+  const [editingQuiz, setEditingQuiz] = useState<{ sectionIdx: number; questionIdx: number } | null>(null);
+  const [editingQuizData, setEditingQuizData] = useState<Question | null>(null);
+
+  // 1. 新增 useEffect
+  useEffect(() => {
+    if (editingQuiz) {
+      const { sectionIdx, questionIdx } = editingQuiz;
+      if (
+        sections[sectionIdx] &&
+        sections[sectionIdx].questions &&
+        sections[sectionIdx].questions[questionIdx]
+      ) {
+        setEditingQuizData({ ...sections[sectionIdx].questions[questionIdx] });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingQuiz, sections]);
 
   function isYoutubeUrl(url: string) {
     return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(url);
